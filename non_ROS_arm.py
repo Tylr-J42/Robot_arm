@@ -8,14 +8,13 @@ import numpy as np
 JOINT_NAMES = ['1st', '2nd', '3rd', '4th', '5th', '6th']  # URDF virtual joints
 DIR_PINS = [31, 36, 38, 33, 23, 22]
 STEP_PINS = [32, 37, 40, 35, 21, 29]
-EN_PIN = 21
+EN_PIN = 11
 STEPS_PER_REV = 200 * 8 # steppers at 1/8 microstepping
 RAD_PER_REV = 2 * math.pi
-GEAR_RATIOS = [150.0/15.0, 33.0/13.0*19.0, -24.0/16.0*19.0, 100.0/14.0, 80.0/12.0, 80.0/12.0]  # For motor1-4, then motor5,6 (wrist shared GR)
+GEAR_RATIOS = [150.0/15.0, 33.0/13.0*19.0, -24.0/16.0*19.0, 100.0/14.0, -80.0/12.0*(25.0/13.0), -80.0/12.0*(25.0/13.0)]  # For motor1-4, then motor5,6 (wrist shared GR)
 WRIST_DIFF_FACTOR = 2 * (25.0 / 13.0)  # E.g., pitch = (m5 + m6)/2, yaw = (m5 - m6)/2
 VIRTUAL_MODE = True  # Plan in virtual joint space
-STEP_FREQUENCY = 1250
-PULSE_WIDTH = 0.01
+STEP_FREQUENCY = 750
 
 def convert_virtual_to_motor(virtual_positions):
     """Convert [j1..j4, pitch, yaw] to motor1..6 positions (radians)"""
@@ -48,12 +47,14 @@ def convert_motor_to_virtual(motor_positions):
 #                                                     0.0*math.pi/180.0])  # In motor radians
 
 # "neutral" position
-current_motor_positions = convert_virtual_to_motor([0.0,
+neutral_position = convert_virtual_to_motor([0.0,
                                                     0.0*math.pi/180.0,
                                                     0.0*math.pi/180.0,
                                                     0.0*math.pi/180.0,
                                                     0.0*math.pi/180.0,
                                                     0.0*math.pi/180.0])  # In motor radians
+
+current_motor_positions = neutral_position
 
 def setup_gpio():
     GPIO.setmode(GPIO.BOARD)
@@ -76,7 +77,7 @@ def setup_gpio():
 def cleanup_gpio():
     GPIO.cleanup()
 
-def move_steppers(target_motor_positions, time_to_goal):
+def move_steppers(target_motor_positions):
     """Move steppers to target motor positions."""
     global current_motor_positions
     deltas = [t - c for t, c in zip(target_motor_positions, current_motor_positions)]
@@ -84,7 +85,7 @@ def move_steppers(target_motor_positions, time_to_goal):
     directions = [1 if d >= 0 else -1 for d in deltas]
 
     # Calculate pulse timing
-    period = 1.0 / STEP_FREQUENCY  # Time per step
+    # period = 1.0 / STEP_FREQUENCY  # Time per step
     print(f"Moving to steps: {steps_list}, Directions: {directions}")
 
     count = 0
@@ -121,9 +122,9 @@ def main():
                                 -72.0*math.pi/180.0,
                                 180.0*math.pi/180.0,
                                 78.0*math.pi/180.0,
-                                180.0*math.pi/180.0]),
-        20.0
+                                180.0*math.pi/180.0])
     )
+    print(current_motor_positions)
     print("done moving")
     cleanup_gpio()
 

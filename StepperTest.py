@@ -3,27 +3,27 @@ import time
 
 GPIO.setmode(GPIO.BOARD)
 
-GPIO.setup(40, GPIO.OUT)
-GPIO.setup(38, GPIO.OUT)
+GPIO.setup(35, GPIO.OUT)
+GPIO.setup(33, GPIO.OUT)
 
 count = 0
-frequencyHz = 2500
+frequencyHz = 750
 prevtime = 0
-pulses = 1600*1
+pulses = 10000
 
 try:
     
     print("starting "+str(pulses)+" pulses")
     while count<=pulses*2:
-        GPIO.output(38, GPIO.HIGH)
+        GPIO.output(33, GPIO.HIGH)
         current_time = time.perf_counter()
 
         if(current_time-prevtime >= 1/(frequencyHz*2)):
             if(count%2 == 1):
-                GPIO.output(40, GPIO.HIGH)
+                GPIO.output(35, GPIO.HIGH)
 
             else:
-                GPIO.output(40, GPIO.LOW)
+                GPIO.output(35, GPIO.LOW)
 
             count = count + 1
             prevtime = current_time
