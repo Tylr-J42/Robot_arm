@@ -11,9 +11,8 @@ STEP_PINS = [32, 37, 40, 35, 21, 29]
 EN_PIN = 11
 STEPS_PER_REV = 200 * 8 # steppers at 1/8 microstepping
 RAD_PER_REV = 2 * math.pi
-GEAR_RATIOS = [150.0/15.0, 33.0/13.0*19.0, -24.0/16.0*19.0, 100.0/14.0, -80.0/12.0*(25.0/13.0), -80.0/12.0*(25.0/13.0)]  # For motor1-4, then motor5,6 (wrist shared GR)
+GEAR_RATIOS = [150.0/15.0, 33.0/13.0*19.0, -24.0/16.0*19.0, 100.0/14.0, 80.0/12.0, 80.0/12.0]  # For motor1-4, then motor5,6 (wrist shared GR)
 WRIST_DIFF_FACTOR = 2 * (25.0 / 13.0)  # E.g., pitch = (m5 + m6)/2, yaw = (m5 - m6)/2
-VIRTUAL_MODE = True  # Plan in virtual joint space
 STEP_FREQUENCY = 750
 
 def convert_virtual_to_motor(virtual_positions):
@@ -23,8 +22,10 @@ def convert_virtual_to_motor(virtual_positions):
     m2 = j2 * GEAR_RATIOS[1]
     m3 = j3 * GEAR_RATIOS[2]
     m4 = j4 * GEAR_RATIOS[3]
-    m5 = (pitch + yaw) * GEAR_RATIOS[4] / WRIST_DIFF_FACTOR  # motor5 = (pitch + yaw)/2 * GR
-    m6 = (pitch - yaw) * GEAR_RATIOS[5] / WRIST_DIFF_FACTOR  # motor6 = (pitch - yaw)/2 * GR
+    m5 = ((pitch + yaw) / WRIST_DIFF_FACTOR) * GEAR_RATIOS[4] # motor5 = (pitch + yaw)/2 * GR
+    m6 = ((pitch - yaw) / WRIST_DIFF_FACTOR) * GEAR_RATIOS[5]  # motor6 = (pitch - yaw)/2 * GR
+   # m5 = (pitch + yaw) * GEAR_RATIOS[4] / WRIST_DIFF_FACTOR  # motor5 = (pitch + yaw)/2 * GR
+   # m6 = (pitch - yaw) * GEAR_RATIOS[5] / WRIST_DIFF_FACTOR  # motor6 = (pitch - yaw)/2 * GR
     return [m1, m2, m3, m4, m5, m6]
 
 def convert_motor_to_virtual(motor_positions):
