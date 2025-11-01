@@ -11,7 +11,7 @@ STEP_PINS = [32, 37, 40, 35, 21, 29]
 EN_PIN = 11
 STEPS_PER_REV = 200 * 8 # steppers at 1/8 microstepping
 RAD_PER_REV = 2 * math.pi
-GEAR_RATIOS = [150.0/15.0, 33.0/13.0*19.0, -24.0/16.0*19.0, 100.0/14.0, 80.0/12.0*25.0/13.0, -80.0/12.0*25.0/13.0]  # For motor1-4, then motor5,6 (wrist shared GR)
+GEAR_RATIOS = [150.0/15.0, 33.0/13.0*19.0, -24.0/16.0*19.0, 100.0/14.0, -80.0/12.0*25.0/13.0, 80.0/12.0*25.0/13.0]  # For motor1-4, then motor5,6 (wrist shared GR)
 WRIST_DIFF_FACTOR = 2 * (25.0 / 13.0)  # E.g., pitch = (m5 + m6)/2, yaw = (m5 - m6)/2
 STEP_FREQUENCY = 1000
 
@@ -48,13 +48,27 @@ def convert_motor_to_virtual(motor_positions):
 
 # "neutral" position
 neutral_position = convert_virtual_to_motor([0.0,
-                                                    0.0*math.pi/180.0,
-                                                    0.0*math.pi/180.0,
-                                                    0.0*math.pi/180.0,
-                                                    0.0*math.pi/180.0,
-                                                    0.0*math.pi/180.0])  # In motor radians
+                                            0.0*math.pi/180.0,
+                                            0.0*math.pi/180.0,
+                                            0.0*math.pi/180.0,
+                                            0.0*math.pi/180.0,
+                                            0.0*math.pi/180.0])  # In motor radians
 
-current_motor_positions = neutral_position
+start_position = convert_virtual_to_motor([0.0,
+                                            -45.0*math.pi/180.0,
+                                            -90.0*math.pi/180.0,
+                                            0.0*math.pi/180.0,
+                                            -96.0*math.pi/180.0,
+                                            0.0*math.pi/180.0])  # In motor radians
+
+goal_position = convert_virtual_to_motor([90.0*math.pi/180.0,
+                                5.0*math.pi/180.0,
+                                -72.0*math.pi/180.0,
+                                180.0*math.pi/180.0,
+                                78.0*math.pi/180.0,
+                                90.0*math.pi/180.0])
+
+current_motor_positions = start_position
 
 def setup_gpio():
     GPIO.setmode(GPIO.BOARD)
@@ -120,15 +134,9 @@ def move_steppers(target_motor_positions):
 def main():
     setup_gpio()
     print("moving now")
-    move_steppers(
-        convert_virtual_to_motor([0.0,
-                                5.0*math.pi/180.0,
-                                -72.0*math.pi/180.0,
-                                180.0*math.pi/180.0,
-                                78.0*math.pi/180.0,
-                                90.0*math.pi/180.0])
-    )
+    move_steppers(goal_position)
     print(current_motor_positions)
+    move_steppers(neutral_position)
     print("done moving")
     cleanup_gpio()
 
