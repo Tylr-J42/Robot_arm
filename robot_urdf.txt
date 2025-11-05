@@ -1,0 +1,845 @@
+<?xml version="1.0" ?>
+<!-- Generated using onshape-to-robot -->
+<!-- Onshape https://cad.onshape.com/documents/d0c301e4506d340858f1d1ba/w/f9480a6b56ad6e11bed69cb8/e/27765bc73c59a7d2412c91fb -->
+<robot name="Robot_URDF">
+  <!-- Link base_assy -->
+  <link name="base_assy">
+    <inertial>
+      <origin xyz="-2.40095e-06 0.0450724 0.0255122" rpy="0 0 0"/>
+      <mass value="1.37841"/>
+      <inertia ixx="0.0102298" ixy="-3.9244e-07" ixz="-7.70994e-08" iyy="0.00544947" iyz="-0.00145627" izz="0.0143163"/>
+    </inertial>
+    <!-- Part base_structure_reinforcement -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/base_structure_reinforcement.stl"/>
+      </geometry>
+      <material name="base_structure_reinforcement_material">
+        <color rgba="0.498039 0.498039 0.498039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/base_structure_reinforcement.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part turret_motor_mount -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/turret_motor_mount.stl"/>
+      </geometry>
+      <material name="turret_motor_mount_material">
+        <color rgba="0.647059 0.647059 0.647059 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/turret_motor_mount.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part turret_base_plate -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/turret_base_plate.stl"/>
+      </geometry>
+      <material name="turret_base_plate_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/turret_base_plate.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part part_1 -->
+    <visual>
+      <origin xyz="-0.0734624 0.0734624 0.00603125" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/part_1.stl"/>
+      </geometry>
+      <material name="part_1_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0734624 0.0734624 0.00603125" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/part_1.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 17he19_2004s -->
+    <visual>
+      <origin xyz="0 0.127575 0.033" rpy="-1.6404e-16 -0 3.14159"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/17he19_2004s.stl"/>
+      </geometry>
+      <material name="17he19_2004s_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 0.127575 0.033" rpy="-1.6404e-16 -0 3.14159"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/17he19_2004s.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part part_1_2 -->
+    <visual>
+      <origin xyz="0.0734624 -0.0734624 0.00603125" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/part_1.stl"/>
+      </geometry>
+      <material name="part_1_2_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0734624 -0.0734624 0.00603125" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/part_1.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part part_1_3 -->
+    <visual>
+      <origin xyz="0.0734624 0.0734624 0.00603125" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/part_1.stl"/>
+      </geometry>
+      <material name="part_1_3_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0734624 0.0734624 0.00603125" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/part_1.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part part_1_4 -->
+    <visual>
+      <origin xyz="-0.0734624 -0.0734624 0.00603125" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/part_1.stl"/>
+      </geometry>
+      <material name="part_1_4_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.0734624 -0.0734624 0.00603125" rpy="0 -0 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/part_1.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link 1st_joint_turret -->
+  <link name="1st_joint_turret">
+    <inertial>
+      <origin xyz="0.0120465 0.0550806 0.0453227" rpy="0 0 0"/>
+      <mass value="295.035"/>
+      <inertia ixx="0.136985" ixy="-0.000135596" ixz="0.00168873" iyy="0.138506" iyz="-0.000236709" izz="0.13681"/>
+    </inertial>
+    <!-- Part nema_23_stepper -->
+    <visual>
+      <origin xyz="0 -2.00005e-17 -0.0139687" rpy="-6.55644e-16 -0 3.22247e-32"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/nema_23_stepper.stl"/>
+      </geometry>
+      <material name="nema_23_stepper_material">
+        <color rgba="0.972549 0.529412 0.00392157 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -2.00005e-17 -0.0139687" rpy="-6.55644e-16 -0 3.22247e-32"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/nema_23_stepper.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part turret_pulley -->
+    <visual>
+      <origin xyz="0 -2.00005e-17 -0.0139687" rpy="-6.55644e-16 -0 3.22247e-32"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/turret_pulley.stl"/>
+      </geometry>
+      <material name="turret_pulley_material">
+        <color rgba="0.917647 0.917647 0.917647 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0 -2.00005e-17 -0.0139687" rpy="-6.55644e-16 -0 3.22247e-32"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/turret_pulley.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link 2nd_arm_joint -->
+  <link name="2nd_arm_joint">
+    <inertial>
+      <origin xyz="5.47459e-10 0.159764 -0.0628974" rpy="0 0 0"/>
+      <mass value="295.395"/>
+      <inertia ixx="0.150454" ixy="-2.17425e-07" ixz="-1.7416e-08" iyy="0.136674" iyz="-0.00211014" izz="0.147976"/>
+    </inertial>
+    <!-- Part first_left_section -->
+    <visual>
+      <origin xyz="0.04 -0.09 -0.037" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/first_left_section.stl"/>
+      </geometry>
+      <material name="first_left_section_material">
+        <color rgba="0.768627 0.886275 0.952941 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 -0.09 -0.037" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/first_left_section.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part first_upper_left_arm_section -->
+    <visual>
+      <origin xyz="0.04 -0.09 -0.03705" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/first_upper_left_arm_section.stl"/>
+      </geometry>
+      <material name="first_upper_left_arm_section_material">
+        <color rgba="0.980392 0.713725 0.00392157 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 -0.09 -0.03705" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/first_upper_left_arm_section.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part first_right_section -->
+    <visual>
+      <origin xyz="0.04 -0.09 -0.037" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/first_right_section.stl"/>
+      </geometry>
+      <material name="first_right_section_material">
+        <color rgba="0.768627 0.886275 0.952941 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 -0.09 -0.037" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/first_right_section.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part middle_stage -->
+    <visual>
+      <origin xyz="0.04 -0.09 -0.037" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/middle_stage.stl"/>
+      </geometry>
+      <material name="middle_stage_material">
+        <color rgba="0.768627 0.886275 0.952941 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 -0.09 -0.037" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/middle_stage.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part nema_23_stepper_2 -->
+    <visual>
+      <origin xyz="0.0551203 0.21903 -0.075" rpy="1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/nema_23_stepper.stl"/>
+      </geometry>
+      <material name="nema_23_stepper_2_material">
+        <color rgba="0.972549 0.529412 0.00392157 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0551203 0.21903 -0.075" rpy="1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/nema_23_stepper.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part middle_stage_2 -->
+    <visual>
+      <origin xyz="0.04 -0.09 -0.037" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/middle_stage__2.stl"/>
+      </geometry>
+      <material name="middle_stage_2_material">
+        <color rgba="0.768627 0.886275 0.952941 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 -0.09 -0.037" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/middle_stage__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part first_upper_right_arm_section -->
+    <visual>
+      <origin xyz="0.04 -0.09 -0.03705" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/first_upper_right_arm_section.stl"/>
+      </geometry>
+      <material name="first_upper_right_arm_section_material">
+        <color rgba="0.498039 0.498039 0.498039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 -0.09 -0.03705" rpy="-1.5708 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/first_upper_right_arm_section.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link 3rd_arm_joint -->
+  <link name="3rd_arm_joint">
+    <inertial>
+      <origin xyz="0.0252436 -0.0438098 -0.0477946" rpy="0 0 0"/>
+      <mass value="1.08965"/>
+      <inertia ixx="0.00290572" ixy="-0.00151692" ixz="5.7942e-05" iyy="0.00418207" iyz="-0.000107542" izz="0.00592076"/>
+    </inertial>
+    <!-- Part 4rth_axis_carrier -->
+    <visual>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/4rth_axis_carrier.stl"/>
+      </geometry>
+      <material name="4rth_axis_carrier_material">
+        <color rgba="0.647059 0.647059 0.647059 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/4rth_axis_carrier.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part middle_stage_3 -->
+    <visual>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/middle_stage__3.stl"/>
+      </geometry>
+      <material name="middle_stage_3_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/middle_stage__3.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 52_od_40_id_5_width_bearing -->
+    <visual>
+      <origin xyz="-0.09 -0.04 0.011" rpy="3.14159 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/52_od_40_id_5_width_bearing.stl"/>
+      </geometry>
+      <material name="52_od_40_id_5_width_bearing_material">
+        <color rgba="0.768627 0.886275 0.952941 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.09 -0.04 0.011" rpy="3.14159 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/52_od_40_id_5_width_bearing.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 78x60x10_bearing -->
+    <visual>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/78x60x10_bearing.stl"/>
+      </geometry>
+      <material name="78x60x10_bearing_material">
+        <color rgba="0.231373 0.380392 0.705882 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/78x60x10_bearing.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 17he19_2004s_2 -->
+    <visual>
+      <origin xyz="0.065 -0.013895 -0.05" rpy="1.46491e-14 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/17he19_2004s.stl"/>
+      </geometry>
+      <material name="17he19_2004s_2_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.065 -0.013895 -0.05" rpy="1.46491e-14 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/17he19_2004s.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part middle_stage_spacer -->
+    <visual>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/middle_stage_spacer.stl"/>
+      </geometry>
+      <material name="middle_stage_spacer_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/middle_stage_spacer.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part outer_shell -->
+    <visual>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/outer_shell.stl"/>
+      </geometry>
+      <material name="outer_shell_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/outer_shell.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part top_outer_shell -->
+    <visual>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/top_outer_shell.stl"/>
+      </geometry>
+      <material name="top_outer_shell_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.04 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/top_outer_shell.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 78x60x10_bearing_2 -->
+    <visual>
+      <origin xyz="-0.05 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/78x60x10_bearing.stl"/>
+      </geometry>
+      <material name="78x60x10_bearing_2_material">
+        <color rgba="0.231373 0.380392 0.705882 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.05 0.49 0.035" rpy="1.5708 1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/78x60x10_bearing.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link 4rth_arm_joint -->
+  <link name="4rth_arm_joint">
+    <inertial>
+      <origin xyz="-0.00112052 0.000315783 -0.25626" rpy="0 0 0"/>
+      <mass value="1.43603"/>
+      <inertia ixx="0.0166251" ixy="-8.84587e-07" ixz="1.3385e-05" iyy="0.0170284" iyz="-4.4874e-05" izz="0.00115493"/>
+    </inertial>
+    <!-- Part wrist_belt_cover -->
+    <visual>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/wrist_belt_cover.stl"/>
+      </geometry>
+      <material name="wrist_belt_cover_material">
+        <color rgba="0.498039 0.498039 0.498039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/wrist_belt_cover.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 100t_gt2_pulley -->
+    <visual>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/100t_gt2_pulley.stl"/>
+      </geometry>
+      <material name="100t_gt2_pulley_material">
+        <color rgba="0.768627 0.886275 0.952941 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/100t_gt2_pulley.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part bevel_carrier_spacer -->
+    <visual>
+      <origin xyz="0.0443 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/bevel_carrier_spacer.stl"/>
+      </geometry>
+      <material name="bevel_carrier_spacer_material">
+        <color rgba="0.768627 0.886275 0.952941 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.0443 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/bevel_carrier_spacer.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 17he19_2004s_3 -->
+    <visual>
+      <origin xyz="-0.025 -5.04041e-14 -0.232" rpy="-1.5708 -3.52285e-15 -1.5708"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/17he19_2004s.stl"/>
+      </geometry>
+      <material name="17he19_2004s_3_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.025 -5.04041e-14 -0.232" rpy="-1.5708 -3.52285e-15 -1.5708"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/17he19_2004s.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 3_8in_round_shaft -->
+    <visual>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/3_8in_round_shaft.stl"/>
+      </geometry>
+      <material name="3_8in_round_shaft_material">
+        <color rgba="0.498039 0.498039 0.498039 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/3_8in_round_shaft.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 17he19_2004s_4 -->
+    <visual>
+      <origin xyz="0.025 -5.30687e-14 -0.34" rpy="6.95373e-14 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/17he19_2004s.stl"/>
+      </geometry>
+      <material name="17he19_2004s_4_material">
+        <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="0.025 -5.30687e-14 -0.34" rpy="6.95373e-14 -1.5708 0"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/17he19_2004s.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 4th_axis_shaft -->
+    <visual>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/4th_axis_shaft.stl"/>
+      </geometry>
+      <material name="4th_axis_shaft_material">
+        <color rgba="0.917647 0.917647 0.917647 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/4th_axis_shaft.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 4th_axis_arm_end -->
+    <visual>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/4th_axis_arm_end.stl"/>
+      </geometry>
+      <material name="4th_axis_arm_end_material">
+        <color rgba="0.972549 0.529412 0.00392157 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.085 0.585 0.01" rpy="1.5708 -6.12323e-17 -8.1511e-30"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/4th_axis_arm_end.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link 5th_wrist_joint -->
+  <link name="5th_wrist_joint">
+    <inertial>
+      <origin xyz="-1.34293e-08 -0.0467299 -0.06363" rpy="0 0 0"/>
+      <mass value="0.485696"/>
+      <inertia ixx="0.000984086" ixy="1.39002e-10" ixz="-1.82961e-11" iyy="0.000869806" iyz="-3.89742e-11" izz="0.000630134"/>
+    </inertial>
+    <!-- Part 13t_herringbone_bevel_gear -->
+    <visual>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/13t_herringbone_bevel_gear.stl"/>
+      </geometry>
+      <material name="13t_herringbone_bevel_gear_material">
+        <color rgba="0.647059 0.647059 0.647059 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/13t_herringbone_bevel_gear.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part long_spacer -->
+    <visual>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/long_spacer.stl"/>
+      </geometry>
+      <material name="long_spacer_material">
+        <color rgba="0.768627 0.886275 0.952941 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/long_spacer.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part wrist_diffy_carrier -->
+    <visual>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/wrist_diffy_carrier.stl"/>
+      </geometry>
+      <material name="wrist_diffy_carrier_material">
+        <color rgba="0.972549 0.529412 0.00392157 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/wrist_diffy_carrier.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 7_8_x3_8__bearing -->
+    <visual>
+      <origin xyz="-2.36478e-14 -4.55191e-15 -0.212528" rpy="-3.16414e-15 4.85167e-14 2.43003e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/7_8_x3_8__bearing.stl"/>
+      </geometry>
+      <material name="7_8_x3_8__bearing_material">
+        <color rgba="0.647059 0.647059 0.647059 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-2.36478e-14 -4.55191e-15 -0.212528" rpy="-3.16414e-15 4.85167e-14 2.43003e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/7_8_x3_8__bearing.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 13t_herringbone_bevel_gear_2 -->
+    <visual>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/13t_herringbone_bevel_gear__2.stl"/>
+      </geometry>
+      <material name="13t_herringbone_bevel_gear_2_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/13t_herringbone_bevel_gear__2.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 7_8_x3_8__bearing_2 -->
+    <visual>
+      <origin xyz="1.11022e-16 0 0.0852681" rpy="3.14159 9.08609e-31 1.81703e-18"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/7_8_x3_8__bearing.stl"/>
+      </geometry>
+      <material name="7_8_x3_8__bearing_2_material">
+        <color rgba="0.647059 0.647059 0.647059 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="1.11022e-16 0 0.0852681" rpy="3.14159 9.08609e-31 1.81703e-18"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/7_8_x3_8__bearing.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part bevel_gear_spacer_2_301 -->
+    <visual>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/bevel_gear_spacer_2_301.stl"/>
+      </geometry>
+      <material name="bevel_gear_spacer_2_301_material">
+        <color rgba="0.980392 0.713725 0.00392157 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.27676e-14 -1.83187e-15 -0.10113" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/bevel_gear_spacer_2_301.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 78x60x10_bearing_3 -->
+    <visual>
+      <origin xyz="-0.085 -0.0558271 -0.64863" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/78x60x10_bearing.stl"/>
+      </geometry>
+      <material name="78x60x10_bearing_3_material">
+        <color rgba="0.231373 0.380392 0.705882 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.085 -0.0558271 -0.64863" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/78x60x10_bearing.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 78x60x10_bearing_4 -->
+    <visual>
+      <origin xyz="-0.085 -0.0358271 -0.64863" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/78x60x10_bearing.stl"/>
+      </geometry>
+      <material name="78x60x10_bearing_4_material">
+        <color rgba="0.231373 0.380392 0.705882 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-0.085 -0.0358271 -0.64863" rpy="-4.77319e-15 4.73437e-14 2.59613e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/78x60x10_bearing.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part bevel_gear_spacer_2_301_2 -->
+    <visual>
+      <origin xyz="-1.13243e-14 -1.4988e-15 0.0102681" rpy="-3.16414e-15 4.85167e-14 2.43003e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/bevel_gear_spacer_2_301.stl"/>
+      </geometry>
+      <material name="bevel_gear_spacer_2_301_2_material">
+        <color rgba="0.980392 0.713725 0.00392157 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="-1.13243e-14 -1.4988e-15 0.0102681" rpy="-3.16414e-15 4.85167e-14 2.43003e-14"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/bevel_gear_spacer_2_301.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Link 6th_wrist_joint -->
+  <link name="6th_wrist_joint">
+    <inertial>
+      <origin xyz="4.62641e-09 -7.76084e-10 -0.0256766" rpy="0 0 0"/>
+      <mass value="0.1"/>
+      <inertia ixx="7.28973e-05" ixy="2.14953e-11" ixz="1.23823e-11" iyy="7.28973e-05" iyz="-2.21115e-12" izz="5.14699e-05"/>
+    </inertial>
+    <!-- Part central_bearing_retention -->
+    <visual>
+      <origin xyz="1.11022e-16 -0.0375 -0.0758271" rpy="-1.5708 1.85253e-16 -1.56393e-17"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/central_bearing_retention.stl"/>
+      </geometry>
+      <material name="central_bearing_retention_material">
+        <color rgba="0.231373 0.380392 0.705882 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="1.11022e-16 -0.0375 -0.0758271" rpy="-1.5708 1.85253e-16 -1.56393e-17"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/central_bearing_retention.stl"/>
+      </geometry>
+    </collision>
+    <!-- Part 25t_herringbone_bevel_gear -->
+    <visual>
+      <origin xyz="1.11022e-16 -0.0375 -0.0758271" rpy="-1.5708 1.85253e-16 -1.56393e-17"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/25t_herringbone_bevel_gear.stl"/>
+      </geometry>
+      <material name="25t_herringbone_bevel_gear_material">
+        <color rgba="0.615686 0.811765 0.929412 1"/>
+      </material>
+    </visual>
+    <collision>
+      <origin xyz="1.11022e-16 -0.0375 -0.0758271" rpy="-1.5708 1.85253e-16 -1.56393e-17"/>
+      <geometry>
+        <mesh filename="file:///home/tyler/Desktop/Robot_URDF/assets/25t_herringbone_bevel_gear.stl"/>
+      </geometry>
+    </collision>
+  </link>
+  <!-- Joint from 5th_wrist_joint to 6th_wrist_joint -->
+  <joint name="6th" type="revolute">
+    <origin xyz="5.66214e-15 -0.0758271 -0.06363" rpy="1.5708 0.0950099 3.16706e-14"/>
+    <parent link="5th_wrist_joint"/>
+    <child link="6th_wrist_joint"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-3.04658" upper="3.2366"/>
+  </joint>
+  <!-- Joint from 4rth_arm_joint to 5th_wrist_joint -->
+  <joint name="5th" type="revolute">
+    <origin xyz="0.0643 1.4988e-14 -0.43" rpy="1.5708 0.0227218 1.5708"/>
+    <parent link="4rth_arm_joint"/>
+    <child link="5th_wrist_joint"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.65279" upper="1.69824"/>
+  </joint>
+  <!-- Joint from 3rd_arm_joint to 4rth_arm_joint -->
+  <joint name="4th" type="revolute">
+    <origin xyz="0.03 -0.095 -0.05" rpy="3.14159 -1.5708 0"/>
+    <parent link="3rd_arm_joint"/>
+    <child link="4rth_arm_joint"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-6.28319" upper="0"/>
+  </joint>
+  <!-- Joint from 2nd_arm_joint to 3rd_arm_joint -->
+  <joint name="3rd" type="revolute">
+    <origin xyz="-3.05311e-16 0.4 -0.00205" rpy="-3.14159 8.73007e-15 -0.0439504"/>
+    <parent link="2nd_arm_joint"/>
+    <child link="3rd_arm_joint"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-1.61475" upper="4.14484"/>
+  </joint>
+  <!-- Joint from 1st_joint_turret to 2nd_arm_joint -->
+  <joint name="2nd" type="revolute">
+    <origin xyz="0.037 -0.04 0.0760313" rpy="1.5708 -0.0114553 1.5708"/>
+    <parent link="1st_joint_turret"/>
+    <child link="2nd_arm_joint"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-0.796853" upper="1.82114"/>
+  </joint>
+  <!-- Joint from base_assy to 1st_joint_turret -->
+  <joint name="1st" type="revolute">
+    <origin xyz="1.92777e-19 -2.71546e-17 0.0139688" rpy="-1.01587e-23 6.16626e-24 -2.88734e-15"/>
+    <parent link="base_assy"/>
+    <child link="1st_joint_turret"/>
+    <axis xyz="0 0 1"/>
+    <limit effort="10" velocity="10" lower="-3.14159" upper="3.14159"/>
+  </joint>
+</robot>
