@@ -1,12 +1,5 @@
 #!/usr/bin/env python3
-"""
-torch_inverse_kinematics.py
 
-Inverse kinematics for the robot defined in robot.urdf using
-differentiable forward kinematics in PyTorch + Adam optimisation.
-
-Author:  ChatGPT (2025-11-09)
-"""
 
 import sys
 from pathlib import Path
@@ -16,269 +9,214 @@ import torch.nn as nn
 import torch.optim as optim
 from typing import List, Tuple
 
-# ----------------------------------------------------------------------
-# 1. URDF parsing (only revolute joints are kept)
-# ----------------------------------------------------------------------
-try:
-    from urdf_parser_py.urdf import URDF
-except ImportError:
-    sys.exit("ERROR: Install urdf_parser_py: pip install urdf-parser-py")
+from urdf_parser_py.urdf import URDF
 
 
 def load_urdf_joints(urdf_path: Path):
     robot = URDF.from_xml_file(str(urdf_path))
-
-    # ---- find the tip link (last link that has a child joint) ----
-    tip = None
-    for j in robot.joints:
-        if j.type != "fixed":
-            tip = j.child
+    outgoing = {j.parent for j in robot.joints if j.type != "fixed"}
+    all_links = {l.name for l in robot.links}
+    tip = (all_links - outgoing).pop()
+    print(f"Tip link: {tip}")
 
     chain = []
+    limits = []
     current = robot.get_root()
     while current != tip:
-        # find the *next* revolute joint leaving this link
-        joint = next((j for j in robot.joints
-                      if j.parent == current and j.type == "revolute"), None)
-        if joint is None:
-            raise RuntimeError(f"Cannot reach tip {tip} from {current}")
+        joint = next((j for j in robot.joints if j.parent == current and j.type == "revolute"), None)
+        if not joint:
+            raise RuntimeError(f"No joint from {current}")
 
-        axis = torch.tensor(joint.axis or [0, 0, 1], dtype=torch.float32)
+        lower = joint.limit.lower if joint.limit else -np.pi
+        upper = joint.limit.upper if joint.limit else  np.pi
+        limits.append((lower, upper))
+
         o = joint.origin
-        pos = torch.tensor(o.position or [0, 0, 0], dtype=torch.float32)
-        rpy = torch.tensor(o.rotation or [0, 0, 0], dtype=torch.float32)
-
-        R = rpy_to_rot(*rpy)                # you can reuse the helper above
-        T = torch.eye(4)
-        T[:3, :3] = R
-        T[:3, 3] = pos
-
-        chain.append((joint.name, axis, T))
+        chain.append((
+            joint.name,
+            joint.axis or [0, 0, 1],
+            o.rotation or [0, 0, 0],
+            o.position or [0, 0, 0]
+        ))
         current = joint.child
-    return chain
+    return chain, limits
 
-# ----------------------------------------------------------------------
-# 2. Differentiable forward kinematics
-# ----------------------------------------------------------------------
+
 def se3_exp(xi: torch.Tensor) -> torch.Tensor:
-    """
-    Exponential map for se(3): xi = [ρ; φ]  (3×1 + 3×1)
-    Returns 4×4 homogeneous transformation.
-    """
-    rho = xi[:3]
-    phi = xi[3:]
+    rho, phi = xi[:3], xi[3:]
     theta = torch.norm(phi)
-    if theta < 1e-8:
-        # small angle → linear approximation
-        R = torch.eye(3, device=xi.device)
-        V = torch.eye(3, device=xi.device)
-    else:
-        a = phi / theta
-        a_cross = torch.tensor([[0, -a[2], a[1]],
-                                [a[2], 0, -a[0]],
-                                [-a[1], a[0], 0]], device=xi.device)
-        R = (torch.eye(3, device=xi.device) +
-             torch.sin(theta) * a_cross +
-             (1 - torch.cos(theta)) * (a_cross @ a_cross))
-        V = (torch.eye(3, device=xi.device) +
-             (1 - torch.cos(theta)) / (theta ** 2) * a_cross +
-             (theta - torch.sin(theta)) / (theta ** 3) * (a_cross @ a_cross))
+    device = xi.device
 
+    if theta < 1e-8:
+        T = torch.eye(4, device=device)
+        skew = torch.zeros(3, 3, device=device)
+        skew[0, 1] = -phi[2]; skew[0, 2] = phi[1]
+        skew[1, 0] = phi[2];  skew[1, 2] = -phi[0]
+        skew[2, 0] = -phi[1]; skew[2, 1] = phi[0]
+        T[:3, :3] = torch.eye(3, device=device) + skew
+        T[:3, 3] = rho
+        return T
+
+    a = phi / theta
+    zeros = torch.zeros_like(a[0])
+
+    a_cross = torch.stack([
+        torch.stack([zeros, -a[2], a[1]]),
+        torch.stack([a[2], zeros, -a[0]]),
+        torch.stack([-a[1], a[0], zeros])
+    ])
+
+    sin_t, cos_t = torch.sin(theta), torch.cos(theta)
+    eye = torch.eye(3, device=device)
+    R = eye + sin_t * a_cross + (1 - cos_t) * (a_cross @ a_cross)
+
+    V = eye + (1 - cos_t) / (theta ** 2) * a_cross + (theta - sin_t) / (theta ** 3) * (a_cross @ a_cross)
     t = V @ rho
-    T = torch.eye(4, device=xi.device)
+
+    T = torch.eye(4, device=device)
     T[:3, :3] = R
     T[:3, 3] = t
     return T
 
-
 class TorchKinematics(nn.Module):
-    def __init__(self, joint_data: List[Tuple[str, torch.Tensor, torch.Tensor]]):
+    def __init__(self, joint_data, limits, device):
         super().__init__()
-        self.joint_data = joint_data                     # (name, axis, parent→joint)
         self.n_dof = len(joint_data)
+        self.q = nn.Parameter(torch.randn(self.n_dof, device=device) * 0.1)
 
-        # Learnable joint angles (initialised at zero)
-        self.q = nn.Parameter(torch.zeros(self.n_dof, dtype=torch.float32))
+        T_list = []
+        axes_list = []
+        for name, axis, rpy, xyz in joint_data:
+            axis_t = torch.tensor(axis, dtype=torch.float32, device=device)
+            r, p, y = [torch.tensor(v, dtype=torch.float32, device=device) for v in rpy]
+            xyz_t = torch.tensor(xyz, dtype=torch.float32, device=device)
 
-        # Register fixed transforms (parent→joint)
-        self.register_buffer('T_fixed', torch.stack([T for _, _, T in joint_data]))
+            cr, sr = torch.cos(r), torch.sin(r)
+            cp, sp = torch.cos(p), torch.sin(p)
+            cy, sy = torch.cos(y), torch.sin(y)
+            ones = torch.ones_like(cr)
+            zeros = torch.zeros_like(cr)
 
-        # Joint axes (in child frame, will be rotated into parent frame later)
-        self.register_buffer('axes', torch.stack([axis for _, axis, _ in joint_data]))
+            Rx = torch.stack([ones, zeros, zeros, zeros, cr, -sr, zeros, sr, cr]).reshape(3, 3)
+            Ry = torch.stack([cp, zeros, sp, zeros, ones, zeros, -sp, zeros, cp]).reshape(3, 3)
+            Rz = torch.stack([cy, -sy, zeros, sy, cy, zeros, zeros, zeros, ones]).reshape(3, 3)
+            R = Rz @ Ry @ Rx
 
-    def forward(self) -> torch.Tensor:
-        """
-        Returns the 4×4 homogeneous matrix of the end-effector w.r.t. base.
-        """
-        T = torch.eye(4, device=self.q.device)      # base frame
+            T = torch.eye(4, device=device)
+            T[:3, :3] = R
+            T[:3, 3] = xyz_t
+
+            T_list.append(T)
+            axes_list.append(axis_t)
+
+        self.register_buffer('T_fixed', torch.stack(T_list))
+        self.register_buffer('axes', torch.stack(axes_list))
+
+        # ----- joint limits -----
+        lower = torch.tensor([l[0] for l in limits], device=device)
+        upper = torch.tensor([l[1] for l in limits], device=device)
+        self.register_buffer('lower', lower)
+        self.register_buffer('upper', upper)
+        # -------------------------
+
+    def forward(self):
+        T = torch.eye(4, device=self.q.device)
         for i in range(self.n_dof):
-            # fixed transform up to the joint
             T = T @ self.T_fixed[i]
-
-            # rotation around the joint axis
-            theta = self.q[i]
-            axis = self.axes[i]
-            # twist = [0,0,0, axis] because pure rotation
-            xi = torch.cat([torch.zeros(3, device=theta.device), axis * theta])
-            T_joint = se3_exp(xi)
-            T = T @ T_joint
+            xi = torch.cat([torch.zeros(3, device=self.q.device), self.axes[i] * self.q[i]])
+            T = T @ se3_exp(xi)
         return T
 
-
-# ----------------------------------------------------------------------
-# 3. Pose error (position + orientation)
-# ----------------------------------------------------------------------
 def pose_error(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
-    """
-    pred, target: 4×4 homogeneous matrices.
-    Returns a 6-vector [Δp; Δφ] where Δφ is the axis-angle error.
-    """
-    # position error
+    assert pred.shape == (4, 4) and target.shape == (4, 4)
     dp = target[:3, 3] - pred[:3, 3]
 
-    # rotation error (axis-angle)
-    R_err = target[:3, :3] @ pred[:3, :3].T
+    R_err = target[:3, :3] @ pred[:3, :3].transpose(0, 1)
     trace = torch.trace(R_err)
     theta = torch.acos(torch.clamp((trace - 1) / 2, -1.0, 1.0))
+
     if theta < 1e-8:
         dphi = torch.zeros(3, device=pred.device)
     else:
-        # Rodrigues formula for axis
-        w = torch.stack([R_err[2, 1] - R_err[1, 2],
-                         R_err[0, 2] - R_err[2, 0],
-                         R_err[1, 0] - R_err[0, 1]]) / (2 * torch.sin(theta))
-        dphi = w * theta
-
+        sin_t = torch.sin(theta)
+        if sin_t < 1e-8:
+            dphi = torch.zeros(3, device=pred.device)
+        else:
+            w = torch.stack([
+                R_err[2,1] - R_err[1,2],
+                R_err[0,2] - R_err[2,0],
+                R_err[1,0] - R_err[0,1]
+            ]) / (2 * sin_t)
+            dphi = w * theta
     return torch.cat([dp, dphi])
 
-
-# ----------------------------------------------------------------------
-# 4. IK solver (Adam)
-# ----------------------------------------------------------------------
-def solve_ik_torch(model: TorchKinematics,
-                   target_pose: torch.Tensor,
-                   max_steps: int = 3000,
-                   lr: float = 0.05,
-                   pos_weight: float = 1.0,
-                   rot_weight: float = 1.0,
-                   verbose: bool = True) -> torch.Tensor:
-    """
-    Returns the joint angles (torch tensor) that minimise the pose error.
-    """
-    optimizer = optim.Adam(model.parameters(), lr=lr)
-    scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=800, gamma=0.5)
-
-    for step in range(max_steps):
-        optimizer.zero_grad()
+def solve_ik(model, target_pose, max_steps=3000, lr=0.15):
+    opt = optim.Adam(model.parameters(), lr=lr)
+    for i in range(max_steps):
+        opt.zero_grad()
         pred = model()
-        err = pose_error(pred, target_pose)
-        loss = pos_weight * torch.sum(err[:3] ** 2) + rot_weight * torch.sum(err[3:] ** 2)
+        err  = pose_error(pred, target_pose)
+        loss = torch.sum(err[:3]**2) + 0.3 * torch.sum(err[3:]**2)
         loss.backward()
-        optimizer.step()
-        scheduler.step()
+        opt.step()
 
-        if verbose and (step % 200 == 0 or step == max_steps - 1):
-            pos_err = torch.norm(err[:3]).item()
-            rot_err = torch.norm(err[3:]).item()
-            print(f"Step {step:4d} | loss {loss.item():.6f} | "
-                  f"pos_err {pos_err:.5f} m | rot_err {rot_err:.5f} rad")
+        # ----- clamp to joint limits -----
+        with torch.no_grad():
+            model.q.clamp_(model.lower, model.upper)
+        # ---------------------------------
 
-        if loss.item() < 1e-10:
+        if i % 300 == 0 or i == max_steps - 1:
+            print(f"Step {i:4d} | loss: {loss.item():.6f} | pos_err: {torch.norm(err[:3]).item():.5f}")
+        if loss < 1e-7:
+            print(f"Converged at step {i}")
             break
+    return model.q.detach()
 
-    return model.q.detach().clone()
-
-
-# ----------------------------------------------------------------------
-# 5. Example / demo
-# ----------------------------------------------------------------------
 def main():
     urdf_path = Path("/home/tyler/Desktop/Robot_URDF/robot.urdf")
-    if not urdf_path.is_file():
-        sys.exit(f"ERROR: {urdf_path} not found")
+    if not urdf_path.exists():
+        sys.exit("URDF not found")
 
-    print("Parsing URDF ...")
-    joints = load_urdf_joints(urdf_path)
-    print(f"  → {len(joints)} revolute joints found:")
-    for name, _, _ in joints:
-        print(f"      {name}")
+    print("Loading URDF...")
+    joints, limits = load_urdf_joints(urdf_path)
+    print(f"Found {len(joints)} joints: {[n for n, _, _, _ in joints]}")
 
-    # ------------------------------------------------------------------
-    # Desired end-effector pose (base frame)
-    # ------------------------------------------------------------------
-    # Edit these values freely.
-    target_pos = torch.tensor([0.50, 0.00, 0.25], dtype=torch.float32).to(device)
-    target_rpy = torch.tensor([0.0, 0.0, 0.0], dtype=torch.float32).to(device)
-    target_pose = rpy_to_matrix(*target_rpy)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Device: {device}")
 
-    # Build homogeneous matrix
-    def rpy_to_matrix(r: torch.Tensor, p: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
-        """Convert roll-pitch-yaw (rad) to a 4×4 SE(3) matrix."""
+    # Target pose
+    target_pos = torch.tensor([0.5, 0.0, 0.5], device=device)
+    target_rpy = torch.tensor([0.0, 0.0, 0.0], device=device)
+
+    def rpy_to_mat(r, p, y):
         cr, sr = torch.cos(r), torch.sin(r)
         cp, sp = torch.cos(p), torch.sin(p)
         cy, sy = torch.cos(y), torch.sin(y)
+        ones = torch.ones_like(cr)
+        zeros = torch.zeros_like(cr)
 
-        # ---- Rx (roll) ----
-        Rx = torch.stack([torch.ones_like(cr), torch.zeros_like(cr), torch.zeros_like(cr),
-                        torch.zeros_like(cr), cr, -sr,
-                        torch.zeros_like(cr), sr, cr]).reshape(3, 3)
-
-        # ---- Ry (pitch) ----
-        Ry = torch.stack([cp, torch.zeros_like(cp), sp,
-                        torch.zeros_like(cp), torch.ones_like(cp), torch.zeros_like(cp),
-                        -sp, torch.zeros_like(cp), cp]).reshape(3, 3)
-
-        # ---- Rz (yaw) ----
-        Rz = torch.stack([cy, -sy, torch.zeros_like(cy),
-                        sy, cy, torch.zeros_like(cy),
-                        torch.zeros_like(cy), torch.zeros_like(cy), torch.ones_like(cy)]).reshape(3, 3)
-
+        Rx = torch.stack([ones, zeros, zeros, zeros, cr, -sr, zeros, sr, cr]).reshape(3, 3)
+        Ry = torch.stack([cp, zeros, sp, zeros, ones, zeros, -sp, zeros, cp]).reshape(3, 3)
+        Rz = torch.stack([cy, -sy, zeros, sy, cy, zeros, zeros, zeros, ones]).reshape(3, 3)
         R = Rz @ Ry @ Rx
         T = torch.eye(4, device=r.device)
         T[:3, :3] = R
-        T[:3, 3] = target_pos          # target_pos is already a tensor on the right device
+        T[:3, 3] = target_pos
         return T
 
-    target_pose = rpy_to_matrix(*target_rpy)
+    target = rpy_to_mat(*target_rpy)
 
-    # ------------------------------------------------------------------
-    # Build the differentiable model
-    # ------------------------------------------------------------------
-    device = torch.device("rocm" if torch.cuda.is_available() else "cpu")
-    print(f"Using device: {device}")
+    model = TorchKinematics(joints, limits, device)
+    q_sol = solve_ik(model, target)
 
-    model = TorchKinematics(joints).to(device)
-    target_pose = target_pose.to(device)
+    print("\nIK Solution:")
+    for (name, _, _, _), q in zip(joints, q_sol.cpu().numpy()):
+        print(f"  {name:8s}: {q:+.6f} rad ({np.degrees(q):+7.2f} degrees)")
 
-    # ------------------------------------------------------------------
-    # Solve IK
-    # ------------------------------------------------------------------
-    print("\nSolving inverse kinematics with Adam ...")
-    q_sol = solve_ik_torch(model, target_pose,
-                           max_steps=4000,
-                           lr=0.08,
-                           pos_weight=1.0,
-                           rot_weight=0.5)
-
-    # ------------------------------------------------------------------
-    # Print results
-    # ------------------------------------------------------------------
-    print("\nIK solution (radians / degrees):")
-    for (name, _, _), val in zip(joints, q_sol.cpu().numpy()):
-        deg = np.degrees(val)
-        print(f"  {name:12s} : {val: .6f} rad  ({deg: .2f}° )")
-
-    # ------------------------------------------------------------------
-    # Verify with forward kinematics
-    # ------------------------------------------------------------------
     with torch.no_grad():
         pred = model()
-    print("\nVerification (FK of solution):")
-    print(f"  position : {pred[:3, 3].cpu().numpy()} m")
-    rpy_pred = pred[:3, :3].cpu().numpy()
-    from scipy.spatial.transform import Rotation as R
-    euler = R.from_matrix(rpy_pred).as_euler('xyz')
-    print(f"  RPY      : {euler} rad  ({np.degrees(euler)}°)")
+    print(f"\nFinal pose: {pred[:3,3].cpu().numpy()}")
+    print(f"Target:     {target[:3,3].cpu().numpy()}")
 
 
 if __name__ == "__main__":
