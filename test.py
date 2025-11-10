@@ -8,5 +8,5 @@ pos = [0.30, 0.0, 0.45]
 orn = p.getQuaternionFromEuler([0, np.pi, 0])
 
 q = p.calculateInverseKinematics(robot, ee, pos, orn)
-print("IK success → first three joints (deg):",
+print("IK success -> first three joints (deg):",
       [round(np.degrees(q[i]),2) for i in range(3)])
