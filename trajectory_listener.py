@@ -1,9 +1,11 @@
-
+#!/usr/bin/env python3
+import rclpy
+from rclpy.node import Node
+from trajectory_msgs.msg import JointTrajectory
+import numpy as np
 import time
 import math
 import RPi.GPIO as GPIO
-import numpy as np
-import threading
 
 # Config
 JOINT_NAMES = ['1st', '2nd', '3rd', '4th', '5th', '6th']  # URDF virtual joints
@@ -62,13 +64,6 @@ start_position = convert_virtual_to_motor([0.0,
                                             -96.0*math.pi/180.0,
                                             0.0*math.pi/180.0])  # In motor radians
 
-goal_position = convert_virtual_to_motor([90.0*math.pi/180.0,
-                                5.0*math.pi/180.0,
-                                -72.0*math.pi/180.0,
-                                180.0*math.pi/180.0,
-                                78.0*math.pi/180.0,
-                                90.0*math.pi/180.0])
-
 current_motor_positions = start_position
 
 def setup_gpio():
@@ -91,6 +86,7 @@ def setup_gpio():
 
 def cleanup_gpio():
     GPIO.cleanup()
+        
 
 def move_steppers(target_motor_positions, time_to_goal):
     """Move steppers to target motor positions."""
@@ -98,18 +94,16 @@ def move_steppers(target_motor_positions, time_to_goal):
     deltas = [t - c for t, c in zip(target_motor_positions, current_motor_positions)]
     steps_list = [int(abs(d * STEPS_PER_REV / RAD_PER_REV)) for d in deltas]
     directions = [1 if d >= 0 else -1 for d in deltas]
-    frequencies_list = [0, 0, 0, 0, 0, 0]
+    frequencies_list = [None] * 6
 
-    for i in range(6):
+    for i in range(frequencies_list):
         frequencies_list[i] = steps_list[i] / time_to_goal
-
-    print(frequencies_list)
 
     # Calculate pulse timing
     # period = 1.0 / STEP_FREQUENCY  # Time per step
     print(f"Moving to steps: {steps_list}, Directions: {directions}")
 
-    count_list = [0, 0, 0, 0, 0, 0]
+    count = 0
 
     for i in range(0,len(DIR_PINS)):
             if(directions[i]>0):
@@ -120,38 +114,78 @@ def move_steppers(target_motor_positions, time_to_goal):
 
     prev_time_list = [0, 0, 0, 0, 0, 0]
 
-    while max(count_list)<=max(steps_list)*2:
+    while count<=max(steps_list)*2:
         
         for m in range(6):
             current_time = time.perf_counter()
+
             if(current_time-prev_time_list[m] >= 1/(frequencies_list[m]*2)):
-                if(count_list[m]%2 == 1):
+                if(count%2 == 1):
                     for i in range(0, len(STEP_PINS)):
-                        if(steps_list[i]*2>count_list[m]):
+                        if(steps_list[i]*2>count):
                             GPIO.output(STEP_PINS[i], GPIO.HIGH)
 
                 else:
                     for i in STEP_PINS:
                         GPIO.output(i, GPIO.LOW)
 
-                count_list[m] = count_list[m] + 1
+                count = count + 1
                 prev_time_list[m] = current_time
 
     current_motor_positions = target_motor_positions
 
+class TrajectoryListener(Node):
+    def __init__(self):
+        super().__init__('trajectory_listener')
+        self.subscription = self.create_subscription(
+            JointTrajectory,
+            '/joint_trajectory',
+            self.callback,
+            10
+        )
+        self.get_logger().info("Listening for /joint_trajectory...")
+
+    def callback(self, msg):
+        self.get_logger().info(f"Received trajectory with {len(msg.points)} points")
+        
+        self.execute_trajectory(msg)
+
+    def execute_trajectory(self, msg):
+        """
+    Called every time the controller publishes a new trajectory.
+    Converts radians → degrees and streams to the robot.
+    """
+        self.get_logger().info(f"EXECUTING trajectory: {len(msg.points)} points")
+
+        for i, point in enumerate(msg.points):
+            # 1. ROS gives radians → convert to degrees
+            joints_rad = point.positions
+            joints_deg = [round(np.degrees(q), 2) for q in joints_rad]
+
+            # 2. Pretty log
+            t_sec = point.time_from_start.sec + point.time_from_start.nanosec * 1e-9
+            self.get_logger().info(f"  [{i+1}/{len(msg.points)}] t={t_sec:.1f}s → "
+                                f"[{', '.join(f'{d:6.1f}°' for d in joints_deg)}]")
+
+            # 4. Wait until next point (or end)
+            if i < len(msg.points) - 1:
+                next_t = (msg.points[i+1].time_from_start.sec +
+                        msg.points[i+1].time_from_start.nanosec * 1e-9)
+                sleep_time = max(0.02, next_t - t_sec)   # at least 20 ms
+                time.sleep(sleep_time)
 
 def main():
+    setup_gpio()
+    rclpy.init()
+    node = TrajectoryListener()
     try:
-        setup_gpio()
-        print("moving now")
-        move_steppers(goal_position, 20)
-        print(current_motor_positions)
-        move_steppers(neutral_position, 20)
-        print("done moving")
+        rclpy.spin(node)
+    except KeyboardInterrupt:
         cleanup_gpio()
-    except:
+    finally:
+        node.destroy_node()
+        rclpy.shutdown()
         cleanup_gpio()
-        print("canceled")
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()
