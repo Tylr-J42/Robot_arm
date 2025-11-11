@@ -8,6 +8,14 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from typing import List, Tuple
+import pybullet as p
+import time
+from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
+from sensor_msgs.msg import JointState
+from builtin_interfaces.msg import Duration
+import rclpy
+from rclpy.node import Node
+import threading
 
 from urdf_parser_py.urdf import URDF
 
@@ -172,10 +180,58 @@ def solve_ik(model, target_pose, max_steps=3000, lr=0.15):
             break
     return model.q.detach()
 
+def _joint_state_cb(self, msg):
+    if self.current_joints is None:
+        self.current_joints = [0.0] * len(self.joint_names)
+    for i, name in enumerate(msg.name):
+        if name in self.joint_names:
+            self.current_joints[self.joint_names.index(name)] = msg.position[i]
+    self.state_received.set()
+
+def _set_robot_pose(self, joint_angles_rad):
+    """Update PyBullet simulation to match joint angles"""
+    for i, joint_idx in enumerate(self.joint_indices):
+        p.resetJointState(self.robot_id, joint_idx, joint_angles_rad[i])
+    # Step once to update visuals
+    p.stepSimulation()
+    time.sleep(0.01)  # Small delay for smooth motion
+
 def main():
+    p.connect(p.GUI)
+    p.setRealTimeSimulation(0)
+    p.setGravity(0, 0, -9.81)
+    p.resetDebugVisualizerCamera(1.5, 45, -30, [0.3, 0, 0.5])
+
     urdf_path = Path("/home/tyler/Desktop/Robot_URDF/robot.urdf")
     if not urdf_path.exists():
         sys.exit("URDF not found")
+
+
+    robot_id = p.loadURDF(urdf_path, useFixedBase=True)
+    time.sleep(0.1)
+
+    joint_names = []
+    joint_indices = []
+    joint_lower = []
+    joint_upper = []
+    for i in range(p.getNumJoints(robot_id)):
+        info = p.getJointInfo(robot_id, i)
+        if info[2] == p.JOINT_REVOLUTE:
+            joint_names.append(info[1].decode())
+            joint_indices.append(i)
+            joint_lower.append(info[8])
+            joint_upper.append(info[9])
+
+    # End-effector
+    ee_index = p.getNumJoints(robot_id) - 1
+    ee_name = p.getJointInfo(robot_id, ee_index)[12].decode()
+    get_logger().info(f"End-effector link index {ee_index} ('{ee_name}')")
+
+    # ROS
+    traj_pub = create_publisher(JointTrajectory, '/joint_trajectory', 10)
+    state_sub = create_subscription(JointState, '/joint_states', _joint_state_cb, 10)
+    current_joints = None
+    state_received = threading.Event()
 
     print("Loading URDF...")
     joints, limits = load_urdf_joints(urdf_path)
@@ -186,7 +242,7 @@ def main():
 
     # Target pose
     target_pos = torch.tensor([0.5, 0.0, 0.5], device=device)
-    target_rpy = torch.tensor([0.0, 0.0, 0.0], device=device)
+    target_rpy = torch.tensor([0.0, np.pi/2, 0.0], device=device)
 
     def rpy_to_mat(r, p, y):
         cr, sr = torch.cos(r), torch.sin(r)
