@@ -8,7 +8,6 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from typing import List, Tuple
-import pybullet as p
 import time
 from trajectory_msgs.msg import JointTrajectory, JointTrajectoryPoint
 from sensor_msgs.msg import JointState
@@ -19,6 +18,19 @@ import threading
 
 from urdf_parser_py.urdf import URDF
 
+TIME_BETWEEN_POINTS = 5
+
+START_JOINTS_RAD = [
+    0.0*(np.pi/180.0),    # 1st
+    -45.0*(np.pi/180.0),   # 2nd
+    -90.0*(np.pi/180.0),  # 3rd
+    0.0*(np.pi/180.0),    # 4th
+    -96.0*(np.pi/180.0),  # 5th
+    0.0*(np.pi/180.0)    # 6th
+]
+
+TARGET_POSITION = [0, -0.5, 0.5]
+TARGET_ORIENTATION = [np.pi/2, 0.0, 0.0]
 
 def load_urdf_joints(urdf_path: Path):
     robot = URDF.from_xml_file(str(urdf_path))
@@ -180,69 +192,48 @@ def solve_ik(model, target_pose, max_steps=3000, lr=0.15):
             break
     return model.q.detach()
 
-def _joint_state_cb(self, msg):
-    if self.current_joints is None:
-        self.current_joints = [0.0] * len(self.joint_names)
-    for i, name in enumerate(msg.name):
-        if name in self.joint_names:
-            self.current_joints[self.joint_names.index(name)] = msg.position[i]
-    self.state_received.set()
+class Arm_Node(Node):
+    
+    def __init__(self):
+        super().__init__('pytorch_ik_node')
 
-def _set_robot_pose(self, joint_angles_rad):
-    """Update PyBullet simulation to match joint angles"""
-    for i, joint_idx in enumerate(self.joint_indices):
-        p.resetJointState(self.robot_id, joint_idx, joint_angles_rad[i])
-    # Step once to update visuals
-    p.stepSimulation()
-    time.sleep(0.01)  # Small delay for smooth motion
+        # ROS
+        self.traj_pub = self.create_publisher(JointTrajectory, '/joint_trajectory', 10)
+
+        self.joint_names = []
+
+    def publish_trajectory(self, points, times):
+
+        if len(points) < 2: return
+
+        msg = JointTrajectory()
+        msg.joint_names = self.joint_names
+        for q, t in zip(points, times):
+            pt = JointTrajectoryPoint()
+            pt.positions = q
+            pt.time_from_start = Duration(sec=int(t), nanosec=int((t%1)*1e9))
+            msg.points.append(pt)
+
+        self.traj_pub.publish(msg)
+        return
 
 def main():
-    p.connect(p.GUI)
-    p.setRealTimeSimulation(0)
-    p.setGravity(0, 0, -9.81)
-    p.resetDebugVisualizerCamera(1.5, 45, -30, [0.3, 0, 0.5])
 
-    urdf_path = Path("/home/tyler/Desktop/Robot_URDF/robot.urdf")
-    if not urdf_path.exists():
-        sys.exit("URDF not found")
+    rclpy.init()
+    arm_node = Arm_Node()
 
-
-    robot_id = p.loadURDF(urdf_path, useFixedBase=True)
-    time.sleep(0.1)
-
-    joint_names = []
-    joint_indices = []
-    joint_lower = []
-    joint_upper = []
-    for i in range(p.getNumJoints(robot_id)):
-        info = p.getJointInfo(robot_id, i)
-        if info[2] == p.JOINT_REVOLUTE:
-            joint_names.append(info[1].decode())
-            joint_indices.append(i)
-            joint_lower.append(info[8])
-            joint_upper.append(info[9])
-
-    # End-effector
-    ee_index = p.getNumJoints(robot_id) - 1
-    ee_name = p.getJointInfo(robot_id, ee_index)[12].decode()
-    get_logger().info(f"End-effector link index {ee_index} ('{ee_name}')")
-
-    # ROS
-    traj_pub = create_publisher(JointTrajectory, '/joint_trajectory', 10)
-    state_sub = create_subscription(JointState, '/joint_states', _joint_state_cb, 10)
-    current_joints = None
-    state_received = threading.Event()
+    urdf_path = "/home/tyler/Desktop/Robot_URDF/robot.urdf"
 
     print("Loading URDF...")
     joints, limits = load_urdf_joints(urdf_path)
     print(f"Found {len(joints)} joints: {[n for n, _, _, _ in joints]}")
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     print(f"Device: {device}")
 
     # Target pose
-    target_pos = torch.tensor([0.5, 0.0, 0.5], device=device)
-    target_rpy = torch.tensor([0.0, np.pi/2, 0.0], device=device)
+    target_pos = torch.tensor(TARGET_POSITION, device=device)
+    target_rpy = torch.tensor(TARGET_ORIENTATION, device=device)
 
     def rpy_to_mat(r, p, y):
         cr, sr = torch.cos(r), torch.sin(r)
@@ -260,6 +251,7 @@ def main():
         T[:3, 3] = target_pos
         return T
 
+    start = time.perf_counter()
     target = rpy_to_mat(*target_rpy)
 
     model = TorchKinematics(joints, limits, device)
@@ -273,6 +265,16 @@ def main():
         pred = model()
     print(f"\nFinal pose: {pred[:3,3].cpu().numpy()}")
     print(f"Target:     {target[:3,3].cpu().numpy()}")
+    print(time.perf_counter()-start)
+
+    joint_output = q_sol.cpu().numpy().tolist()
+    print(joint_output)
+
+    arm_node.publish_trajectory(
+        [START_JOINTS_RAD, joint_output],
+        [0.0, TIME_BETWEEN_POINTS]
+    )
+    
 
 
 if __name__ == "__main__":
