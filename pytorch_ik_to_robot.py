@@ -217,23 +217,28 @@ class Arm_Node(Node):
         self.traj_pub.publish(msg)
         return
 
-def main():
+def points_along_line(p1, p2, num_points=10):
 
-    rclpy.init()
-    arm_node = Arm_Node()
+    if num_points < 1:
+        raise ValueError("num_points must be at least 1")
+    
+    p1 = np.array(p1)
+    p2 = np.array(p2)
+    
+    # Generate parameter t from 0 to 1
+    t = np.linspace(0, 1, num_points)
+    
+    # Linear interpolation: points = p1 + t * (p2 - p1)
+    points = p1 + t[:, np.newaxis] * (p2 - p1)
+    
+    return points.tolist()
 
-    urdf_path = "/home/tyler/Desktop/Robot_URDF/robot.urdf"
-
-    print("Loading URDF...")
-    joints, limits = load_urdf_joints(urdf_path)
-    print(f"Found {len(joints)} joints: {[n for n, _, _, _ in joints]}")
-
+def point_to_IK(target_pos, target_orientation, joints, limits):
     device = torch.device("cpu")
-    print(f"Device: {device}")
 
     # Target pose
-    target_pos = torch.tensor(TARGET_POSITION, device=device)
-    target_rpy = torch.tensor(TARGET_ORIENTATION, device=device)
+    target_pos = torch.tensor(target_pos, device=device)
+    target_rpy = torch.tensor(target_orientation, device=device)
 
     def rpy_to_mat(r, p, y):
         cr, sr = torch.cos(r), torch.sin(r)
@@ -251,29 +256,53 @@ def main():
         T[:3, 3] = target_pos
         return T
 
-    start = time.perf_counter()
+    # start = time.perf_counter()
     target = rpy_to_mat(*target_rpy)
 
     model = TorchKinematics(joints, limits, device)
     q_sol = solve_ik(model, target)
 
-    print("\nIK Solution:")
-    for (name, _, _, _), q in zip(joints, q_sol.cpu().numpy()):
-        print(f"  {name:8s}: {q:+.6f} rad ({np.degrees(q):+7.2f} degrees)")
+    # print("\nIK Solution:")
+    # for (name, _, _, _), q in zip(joints, q_sol.cpu().numpy()):
+    #     print(f"  {name:8s}: {q:+.6f} rad ({np.degrees(q):+7.2f} degrees)")
 
     with torch.no_grad():
         pred = model()
-    print(f"\nFinal pose: {pred[:3,3].cpu().numpy()}")
-    print(f"Target:     {target[:3,3].cpu().numpy()}")
-    print(time.perf_counter()-start)
+    # print(f"\nFinal pose: {pred[:3,3].cpu().numpy()}")
+    # print(f"Target:     {target[:3,3].cpu().numpy()}")
+    # print(time.perf_counter()-start)
 
     joint_output = q_sol.cpu().numpy().tolist()
-    print(joint_output)
+    # print(joint_output)
+    return joint_output
+
+def main():
+
+    rclpy.init()
+    arm_node = Arm_Node()
+
+    urdf_path = "/home/tyler/Desktop/Robot_URDF/robot.urdf"
+
+    print("Loading URDF...")
+    joints, limits = load_urdf_joints(urdf_path)
+    print(f"Found {len(joints)} joints: {[n for n, _, _, _ in joints]}")
+
+    device = torch.device("cpu")
+    print(f"Device: {device}")
+
+    linear_movements = points_along_line([0.0, -0.25, 0.5], [0.0, -0.5, 0.5], 60)
+
+    final_output = [START_JOINTS_RAD]
+
+    for i in range(len(linear_movements)):
+        final_output.append(point_to_IK(linear_movements[i], TARGET_ORIENTATION, joints, limits))
 
     arm_node.publish_trajectory(
-        [START_JOINTS_RAD, joint_output],
+        final_output,
         [0.0, TIME_BETWEEN_POINTS]
     )
+
+    print(final_output)
     
 
 
