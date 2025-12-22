@@ -18,7 +18,7 @@ import threading
 
 from urdf_parser_py.urdf import URDF
 
-TIME_BETWEEN_POINTS = 5
+TIME_BETWEEN_POINTS = 8
 
 START_JOINTS_RAD = [
     0.0*(np.pi/180.0),    # 1st
@@ -99,10 +99,13 @@ def se3_exp(xi: torch.Tensor) -> torch.Tensor:
     return T
 
 class TorchKinematics(nn.Module):
-    def __init__(self, joint_data, limits, device):
+    def __init__(self, joint_data, limits, device, initial_q=None):
         super().__init__()
         self.n_dof = len(joint_data)
-        self.q = nn.Parameter(torch.randn(self.n_dof, device=device) * 0.1)
+        if initial_q is None:
+            self.q = nn.Parameter(torch.randn(self.n_dof, device=device) * 0.1)
+        else:
+            self.q = nn.Parameter(torch.tensor(initial_q, dtype=torch.float32, device=device))
 
         T_list = []
         axes_list = []
@@ -233,7 +236,7 @@ def points_along_line(p1, p2, num_points=10):
     
     return points.tolist()
 
-def point_to_IK(target_pos, target_orientation, joints, limits):
+def point_to_IK(target_pos, target_orientation, joints, limits, prev_solution):
     device = torch.device("cpu")
 
     # Target pose
@@ -259,7 +262,7 @@ def point_to_IK(target_pos, target_orientation, joints, limits):
     # start = time.perf_counter()
     target = rpy_to_mat(*target_rpy)
 
-    model = TorchKinematics(joints, limits, device)
+    model = TorchKinematics(joints, limits, device, prev_solution)
     q_sol = solve_ik(model, target)
 
     # print("\nIK Solution:")
@@ -281,7 +284,7 @@ def main():
     rclpy.init()
     arm_node = Arm_Node()
 
-    urdf_path = "/home/tyler/Desktop/Robot_URDF/robot.urdf"
+    urdf_path = "/home/tyler/Desktop/Robot_URDF_EE/robot.urdf"
 
     print("Loading URDF...")
     joints, limits = load_urdf_joints(urdf_path)
@@ -290,19 +293,25 @@ def main():
     device = torch.device("cpu")
     print(f"Device: {device}")
 
-    linear_movements = points_along_line([0.0, -0.25, 0.5], [0.0, -0.5, 0.5], 60)
+    linear_movements = points_along_line([0.0, -0.25, 0.5], [0.0, -0.5, 0.5], 10)
 
     final_output = [START_JOINTS_RAD]
+    time_to_goals = [0.0]
+
+    prev_solution = START_JOINTS_RAD
 
     for i in range(len(linear_movements)):
-        final_output.append(point_to_IK(linear_movements[i], TARGET_ORIENTATION, joints, limits))
+        IK_solution = point_to_IK(linear_movements[i], TARGET_ORIENTATION, joints, limits, prev_solution)
+        final_output.append(IK_solution)
+        time_to_goals.append(TIME_BETWEEN_POINTS)
+        prev_solution = IK_solution
 
     arm_node.publish_trajectory(
         final_output,
-        [0.0, TIME_BETWEEN_POINTS]
+        time_to_goals
     )
 
-    print(final_output)
+    print(np.degrees(final_output))
     
 
 
