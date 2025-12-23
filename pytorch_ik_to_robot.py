@@ -262,8 +262,26 @@ def point_to_IK(target_pos, target_orientation, joints, limits, prev_solution):
     # start = time.perf_counter()
     target = rpy_to_mat(*target_rpy)
 
+    # Adjust for EE offset (from robot_ee.urdf)
+    offset_pos = torch.tensor([-0.0095, 0.0, 0.06275], device=device)
+    offset_rpy = torch.tensor([0.0, 0.0, 0.0], device=device)#[-np.pi/2, 0.0, np.pi/2], device=device)
+    T_offset = rpy_to_mat(*offset_rpy)
+    T_offset[:3, 3] = offset_pos
+
+    # Compute inverse of T_offset
+    R_offset = T_offset[:3, :3]
+    t_offset = T_offset[:3, 3]
+    inv_R_offset = R_offset.transpose(0, 1)
+    inv_t_offset = -inv_R_offset @ t_offset
+    inv_T_offset = torch.eye(4, device=device)
+    inv_T_offset[:3, :3] = inv_R_offset
+    inv_T_offset[:3, 3] = inv_t_offset
+
+    # Adjust target to account for offset (target_for_6th = target_ee @ inv_T_offset)
+    target_adjusted = target @ inv_T_offset
+
     model = TorchKinematics(joints, limits, device, prev_solution)
-    q_sol = solve_ik(model, target)
+    q_sol = solve_ik(model, target_adjusted)
 
     # print("\nIK Solution:")
     # for (name, _, _, _), q in zip(joints, q_sol.cpu().numpy()):
@@ -284,7 +302,7 @@ def main():
     rclpy.init()
     arm_node = Arm_Node()
 
-    urdf_path = "/home/tyler/Desktop/Robot_URDF_EE/robot.urdf"
+    urdf_path = "/home/tyler/Desktop/Robot_URDF/robot.urdf"
 
     print("Loading URDF...")
     joints, limits = load_urdf_joints(urdf_path)
@@ -293,7 +311,7 @@ def main():
     device = torch.device("cpu")
     print(f"Device: {device}")
 
-    linear_movements = points_along_line([0.0, -0.25, 0.5], [0.0, -0.5, 0.5], 10)
+    linear_movements = points_along_line([0.0, -0.25, 0.5], [0.0, -0.5, 0.5], 5)
 
     final_output = [START_JOINTS_RAD]
     time_to_goals = [0.0]
