@@ -18,7 +18,7 @@ import threading
 
 from urdf_parser_py.urdf import URDF
 
-TIME_BETWEEN_POINTS = 8
+TIME_BETWEEN_POINTS = 1
 
 START_JOINTS_RAD = [
     0.0*(np.pi/180.0),    # 1st
@@ -30,7 +30,14 @@ START_JOINTS_RAD = [
 ]
 
 TARGET_POSITION = [0, -0.5, 0.5]
-TARGET_ORIENTATION = [np.pi/2, 0.0, 0.0]
+TARGET_ORIENTATION = [-np.pi/2, np.pi/2, -np.pi]
+
+GRIPPER_OPEN = 0
+GRIPPER_CLOSED = 100
+
+WAYPOINT_1 = [250, 0, 250]
+WAYPOINT_2 = [250, 0, 500]
+WAYPOINT_3 = [250, -400, 500]
 
 def load_urdf_joints(urdf_path: Path):
     robot = URDF.from_xml_file(str(urdf_path))
@@ -203,7 +210,7 @@ class Arm_Node(Node):
         # ROS
         self.traj_pub = self.create_publisher(JointTrajectory, '/joint_trajectory', 10)
 
-        self.joint_names = []
+        self.joint_names = ['1st', '2nd', '3rd', '4th', '5th', '6th', 'gripper']
 
     def publish_trajectory(self, points, times):
 
@@ -311,18 +318,25 @@ def main():
     device = torch.device("cpu")
     print(f"Device: {device}")
 
-    linear_movements = points_along_line([0.0, -0.25, 0.5], [0.0, -0.5, 0.5], 5)
+    linear_waypoints = points_along_line([0.0, -0.5, 0.25], [0.0, -0.75, 0.25], 10)
 
-    final_output = [START_JOINTS_RAD]
+    final_output = [START_JOINTS_RAD + [GRIPPER_OPEN]]
     time_to_goals = [0.0]
 
     prev_solution = START_JOINTS_RAD
 
-    for i in range(len(linear_movements)):
-        IK_solution = point_to_IK(linear_movements[i], TARGET_ORIENTATION, joints, limits, prev_solution)
-        final_output.append(IK_solution)
-        time_to_goals.append(TIME_BETWEEN_POINTS)
+    for i in range(len(linear_waypoints)):
+        IK_solution = point_to_IK(linear_waypoints[i], TARGET_ORIENTATION, joints, limits, prev_solution)
+        
+        final_output.append(IK_solution + [GRIPPER_OPEN])
+        if(i==0):
+            time_to_goals.append(5)
+        else:
+            time_to_goals.append(TIME_BETWEEN_POINTS)
         prev_solution = IK_solution
+    
+    final_output.append(prev_solution + [GRIPPER_CLOSED])
+    time_to_goals.append(2)
 
     arm_node.publish_trajectory(
         final_output,
