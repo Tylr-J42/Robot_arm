@@ -29,15 +29,19 @@ START_JOINTS_RAD = [
     0.0*(np.pi/180.0)    # 6th
 ]
 
-TARGET_POSITION = [0, -0.5, 0.5]
-TARGET_ORIENTATION = [-np.pi/2, np.pi/2, -np.pi]
+TARGET_ORIENTATION = [0, np.pi, np.pi/2]
 
 GRIPPER_OPEN = 0
 GRIPPER_CLOSED = 100
 
-WAYPOINT_1 = [250, 0, 250]
-WAYPOINT_2 = [250, 0, 500]
-WAYPOINT_3 = [250, -400, 500]
+WAYPOINT_1 = [-0.250, 0.150, 0.375]
+WAYPOINT_2 = [-0.250, 0.150, 0.250]
+WAYPOINT_3 = [-0.250, 0.150, 0.500]
+WAYPOINT_4 = [-0.250, 0.400, 0.500]
+
+MOVE1_RES = 5
+MOVE2_RES = 5
+MOVE3_RES = 5
 
 def load_urdf_joints(urdf_path: Path):
     robot = URDF.from_xml_file(str(urdf_path))
@@ -195,10 +199,11 @@ def solve_ik(model, target_pose, max_steps=3000, lr=0.15):
             model.q.clamp_(model.lower, model.upper)
         # ---------------------------------
 
-        if i % 300 == 0 or i == max_steps - 1:
+        if i % 500 == 0 or i == max_steps - 1:
             print(f"Step {i:4d} | loss: {loss.item():.6f} | pos_err: {torch.norm(err[:3]).item():.5f}")
         if loss < 1e-7:
-            print(f"Converged at step {i}")
+            print(f"Converged at step {i} | loss: {loss.item():.6f} | pos_err: {torch.norm(err[:3]).item():.5f}")
+
             break
     return model.q.detach()
 
@@ -209,6 +214,7 @@ class Arm_Node(Node):
 
         # ROS
         self.traj_pub = self.create_publisher(JointTrajectory, '/joint_trajectory', 10)
+        self.get_logger().info("ballin?")
 
         self.joint_names = ['1st', '2nd', '3rd', '4th', '5th', '6th', 'gripper']
 
@@ -318,7 +324,10 @@ def main():
     device = torch.device("cpu")
     print(f"Device: {device}")
 
-    linear_waypoints = points_along_line([0.0, -0.5, 0.25], [0.0, -0.75, 0.25], 10)
+    linear_move1 = points_along_line(WAYPOINT_1, WAYPOINT_2, MOVE1_RES)
+    linear_move2 = points_along_line(WAYPOINT_2, WAYPOINT_3, MOVE2_RES)
+    linear_move3 = points_along_line(WAYPOINT_3, WAYPOINT_4, MOVE3_RES)
+    linear_waypoints = linear_move1 + linear_move2 + linear_move3
 
     final_output = [START_JOINTS_RAD + [GRIPPER_OPEN]]
     time_to_goals = [0.0]
@@ -327,15 +336,26 @@ def main():
 
     for i in range(len(linear_waypoints)):
         IK_solution = point_to_IK(linear_waypoints[i], TARGET_ORIENTATION, joints, limits, prev_solution)
-        
-        final_output.append(IK_solution + [GRIPPER_OPEN])
+
+        if(i<=MOVE1_RES-1):
+            gripper_state = GRIPPER_OPEN
+        else:
+            gripper_state = GRIPPER_CLOSED
+
+        final_output.append(IK_solution + [gripper_state])
+
         if(i==0):
             time_to_goals.append(5)
         else:
             time_to_goals.append(TIME_BETWEEN_POINTS)
+
+        if(i==MOVE1_RES-1):
+            final_output.append(IK_solution + [GRIPPER_CLOSED])
+            time_to_goals.append(3)
+
         prev_solution = IK_solution
     
-    final_output.append(prev_solution + [GRIPPER_CLOSED])
+    final_output.append(prev_solution + [GRIPPER_OPEN])
     time_to_goals.append(2)
 
     arm_node.publish_trajectory(
