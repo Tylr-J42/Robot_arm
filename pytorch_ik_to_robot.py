@@ -18,7 +18,7 @@ import threading
 
 from urdf_parser_py.urdf import URDF
 
-TIME_BETWEEN_POINTS = 1
+TIME_BETWEEN_POINTS = 0.4
 
 START_JOINTS_RAD = [
     0.0*(np.pi/180.0),    # 1st
@@ -29,19 +29,19 @@ START_JOINTS_RAD = [
     0.0*(np.pi/180.0)    # 6th
 ]
 
-TARGET_ORIENTATION = [0, np.pi, np.pi/2]
+TARGET_ORIENTATION = [np.pi/2, np.pi/2, -np.pi]
 
 GRIPPER_OPEN = 0
 GRIPPER_CLOSED = 100
 
-WAYPOINT_1 = [-0.250, 0.150, 0.375]
-WAYPOINT_2 = [-0.250, 0.150, 0.250]
+WAYPOINT_1 = [-0.250, -0.100, 0.175]
+WAYPOINT_2 = [-0.250, 0.150, 0.175]
 WAYPOINT_3 = [-0.250, 0.150, 0.500]
-WAYPOINT_4 = [-0.250, 0.400, 0.500]
+WAYPOINT_4 = [-0.250, 0.800, 0.500]
 
-MOVE1_RES = 5
-MOVE2_RES = 5
-MOVE3_RES = 5
+MOVE1_RES = 7
+MOVE2_RES = 10
+MOVE3_RES = 17
 
 def load_urdf_joints(urdf_path: Path):
     robot = URDF.from_xml_file(str(urdf_path))
@@ -351,7 +351,7 @@ def main():
 
         if(i==MOVE1_RES-1):
             final_output.append(IK_solution + [GRIPPER_CLOSED])
-            time_to_goals.append(3)
+            time_to_goals.append(2)
 
         prev_solution = IK_solution
     
