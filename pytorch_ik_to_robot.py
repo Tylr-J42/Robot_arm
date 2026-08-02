@@ -354,9 +354,14 @@ def main():
             time_to_goals.append(2)
 
         prev_solution = IK_solution
-    
-    final_output.append(prev_solution + [GRIPPER_OPEN])
-    time_to_goals.append(2)
+
+    pour_solution = prev_solution.copy()
+    pour_solution[5] = pour_solution[5] + np.deg2rad(90)
+    final_output.append(pour_solution + [GRIPPER_CLOSED])
+    time_to_goals.append(5)
+
+    final_output.append(prev_solution + [GRIPPER_CLOSED])
+    time_to_goals.append(1)
 
     arm_node.publish_trajectory(
         final_output,
