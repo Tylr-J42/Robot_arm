@@ -1,0 +1,46 @@
+schema: camera_intrinsics/1
+generated: '2026-08-22T01:49:32'
+resolution:
+- 1280
+- 720
+target: charuco 8x11 (70 corners)
+camera_matrix:
+- - 1007.0241966507105
+  - 0.0
+  - 575.9331981628674
+- - 0.0
+  - 1007.0717649886717
+  - 357.68908087289117
+- - 0.0
+  - 0.0
+  - 1.0
+dist:
+- 0.010408092684312588
+- -0.13017202553462642
+- 0.0013332026965995666
+- -0.006136758437412177
+- 0.14209618568128593
+rms_reprojection_px: 0.38838
+std_fx: 6.216302672236934
+std_fy: 6.499191536346036
+std_cx: 3.289269708374985
+std_cy: 1.821006564810204
+views_used: 40
+views_input: 40
+note: Valid ONLY at this resolution. Re-calibrate if the capture mode, lens, or focus
+  changes.
+capture_settings:
+  fourcc: MJPG
+  frame_width: 1280.0
+  frame_height: 720.0
+  fps: 30.0
+  autofocus: 0.0
+  focus: null
+  zoom: null
+  auto_exposure: 1.0
+  exposure: 60.0
+  auto_wb: 0.0
+  gain: null
+  sharpness: 0.0
+  brightness: 0.0
+  contrast: 1.0

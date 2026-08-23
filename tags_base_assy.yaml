@@ -1,0 +1,72 @@
+schema: apriltag_map/1
+frame_id: base_assy
+units: {length: m, angle: rad}
+family: tag36h11
+
+# Edge of the tag's BLACK BORDER SQUARE, in metres -- not the white quiet zone.
+# Measure a printed tag with calipers against the corner ticks and put the REAL
+# number here, not the nominal 0.060. A 0.5 mm error is a 0.8 % scale error in
+# every pose this map produces.
+default_size: 0.060
+
+# ===========================================================================
+#  >>> THE xyz VALUES BELOW ARE PLACEHOLDERS. REPLACE THEM. <<<
+# ===========================================================================
+#
+# WHERE TO MEASURE FROM -- base_assy, read off the URDF:
+#   X = 0, Y = 0  is the TURRET ROTATION AXIS (joint "1st", axis 0 0 1, sits
+#                 13.97 mm above the origin on that same axis). Drop a plumb
+#                 line through the turret centre; that is your origin.
+#   Z = 0         is the UNDERSIDE of the base plate (the base meshes span
+#                 z = 0.0000 .. 0.0330). So if the robot sits flat on the
+#                 table, Z = 0 IS THE TABLE SURFACE.
+#                 -> every tag lying flat on the table has z: 0.0
+#                    (paper thickness ~0.1 mm; ignore it)
+#
+# The base footprint spans X +/-115 mm and Y -115..+149 mm, so keep tags
+# clear of roughly a 150 mm radius or they end up under the robot.
+#
+# Your reachable workspace is the -X / +Y quadrant (see the waypoints in
+# moveit_pick_and_pour.py). Put the tags there, where the camera looks.
+#
+# ORIENTATION -- for a tag lying FLAT, only yaw is free. Align every tag the
+# same way with a square, then they all share one rpy and you only measure
+# two numbers each:
+#
+#     printed "up" points toward        rpy
+#     -------------------------        --------------------
+#     base_assy +X                     [0, 0, -1.5708]
+#     base_assy +Y                     [0, 0,  0.0   ]
+#     base_assy -X                     [0, 0,  1.5708]
+#     base_assy -Y                     [0, 0,  3.1416]
+#
+# KEEP THEM SPREAD OUT. Three tags is the minimum the solver accepts, and a
+# wide spread is exactly what makes a coplanar (all-flat) base work -- it is
+# what separates the two planar solutions. Clustering them together is the one
+# way to make this configuration fail.
+#
+# Ids 0-9 are reserved for the base; 10-14 are the cube (cube_tags.yaml).
+# scene_solve.check_disjoint() refuses to run if they ever overlap.
+# ===========================================================================
+
+tags:
+  - id: 0
+    xyz: [-0.200, 0.060, 0.000]     # <-- MEASURE: x, y from the turret axis
+    rpy: [0.0, 0.0, -1.5708]
+    note: "PLACEHOLDER -- flat on table, printed up along base_assy +X"
+
+  - id: 1
+    xyz: [-0.200, 0.360, 0.000]     # <-- MEASURE
+    rpy: [0.0, 0.0, -1.5708]
+    note: "PLACEHOLDER -- flat on table"
+
+  - id: 2
+    xyz: [-0.440, 0.200, 0.000]     # <-- MEASURE
+    rpy: [0.0, 0.0, -1.5708]
+    note: "PLACEHOLDER -- flat on table"
+
+# Only three tags, so there is NO redundancy: scene_solve requires all three
+# every capture (min_base_tags=3). If the arm, the cube, or a cable hides one,
+# the solve fails outright rather than degrading. If you can find room for a
+# fourth anywhere the camera sees -- even on top of the electronics enclosure,
+# where being raised is a bonus -- it buys tolerance to occlusion.
