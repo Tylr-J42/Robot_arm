@@ -24,6 +24,7 @@ import yaml
 
 import apriltag_detect
 import camera_capture
+import camera_extrinsics as ext
 import constants
 import scene_solve
 import tag_map as tmap
@@ -57,6 +58,82 @@ def draw_overlay(image, sol, obs, base_map, object_map, K, dist):
     cv2.putText(image, "cube", (int(px) + 10, int(py)),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2, cv2.LINE_AA)
     return image
+
+
+
+def diagnose(images, obs, base_map, object_map, K, dist, err):
+    """Explain a failed solve instead of just refusing.
+
+    Runs the two solves separately with the quality gate OFF, so the numbers
+    that caused the refusal are visible, and cross-checks the base map against
+    what the camera actually measures.
+    """
+    print("\n" + "=" * 70)
+    print("  DIAGNOSIS")
+    print("=" * 70)
+    print(f"\n  failure: {err}\n")
+
+    seen_b = sorted(set(obs) & set(base_map))
+    seen_c = sorted(set(obs) & set(object_map))
+    unknown = sorted(set(obs) - set(base_map) - set(object_map))
+    print(f"  base tags   mapped {sorted(base_map)}   seen {seen_b}"
+          f"{'   MISSING ' + str(sorted(set(base_map)-set(obs))) if len(seen_b)<len(base_map) else ''}")
+    print(f"  cube tags   mapped {sorted(object_map)}   seen {seen_c}"
+          f"{'   MISSING ' + str(sorted(set(object_map)-set(obs))) if len(seen_c)<len(object_map) else ''}")
+    if unknown:
+        print(f"  detected but in NEITHER map: {unknown}")
+
+    for label, mp, seen in (("BASE", base_map, seen_b), ("CUBE", object_map, seen_c)):
+        if len(seen) < 2:
+            continue
+        corr = tmap.build_correspondences({k: obs[k] for k in seen}, mp, warn=False)
+        try:
+            s = ext.solve_correspondences(corr, K, dist, allow_single_tag=True)
+        except Exception as e:
+            print(f"\n  {label}: solve failed ({e})")
+            continue
+        print(f"\n  {label} fit (gate disabled): rms {s.rms_px:.3f} px over "
+              f"{s.n_points} points, planar={s.planar}")
+        for tid in sorted(s.per_tag_rms):
+            note = mp[tid].note if tid in mp else ""
+            print(f"      tag {tid:3d}  {s.per_tag_rms[tid]:7.3f} px   {note}")
+        if len(seen) >= 3:
+            loo = ext.leave_one_tag_out(corr, K, dist)
+            sus = ext.suspect_tag(s.rms_px, loo)
+            if sus is not None:
+                print(f"      -> dropping tag {sus} takes the fit to "
+                      f"{loo[sus].remaining_rms:.2f} px. Re-measure that tag.")
+
+    # Independent scale check: single-tag PnP gives each tag's position in the
+    # camera frame without using the map's xyz at all, so comparing pairwise
+    # distances isolates a mis-MEASURED map from every other cause.
+    if len(seen_b) >= 2:
+        print("\n  base-map cross-check (camera-measured vs map distances):")
+        pos = {}
+        for tid in seen_b:
+            # SOLVEPNP_IPPE, not IPPE_SQUARE -- see the note in
+            # calibrate_camera_extrinsics.solve_single_tag().
+            objp = tmap.tag_corner_offsets(base_map[tid].size).reshape(-1, 1, 3)
+            ok, rv, tv, _ = cv2.solvePnPGeneric(
+                objp, obs[tid].reshape(-1, 1, 2), K, dist,
+                flags=cv2.SOLVEPNP_IPPE)
+            if ok and len(rv):
+                pos[tid] = np.asarray(tv[0]).reshape(3)
+        import itertools
+        worst = 0.0
+        for a, b in itertools.combinations(sorted(pos), 2):
+            meas = float(np.linalg.norm(pos[a] - pos[b]))
+            book = float(np.linalg.norm(base_map[a].t_w - base_map[b].t_w))
+            d = (meas - book) * 1000
+            worst = max(worst, abs(d))
+            print(f"      {a}-{b}:  map {book*1000:7.1f} mm   camera {meas*1000:7.1f} mm"
+                  f"   diff {d:+7.1f} mm")
+        if worst > 8:
+            print("      ** Large disagreement. Either an xyz in the map is wrong,")
+            print("         or default_size does not match the printed tag.")
+        else:
+            print("      distances agree -- the map's geometry looks right, so")
+            print("         suspect image quality (blur/glare) or tag flatness.")
 
 
 def report(sol, stds, grasp, base_map, object_map) -> None:
@@ -114,12 +191,16 @@ def main(argv=None) -> int:
     p.add_argument("--image", type=Path, default=None,
                    help="solve a saved still instead of opening the camera")
     p.add_argument("--device", type=int, default=0)
-    p.add_argument("--exposure", type=int, default=60)
+    p.add_argument("--exposure", type=int, default=None,
+                   help="override constants.CAMERA_SETTINGS exposure")
     p.add_argument("--burst", type=int, default=20,
                    help="frames per capture, averaged to cut corner noise")
     p.add_argument("--min-base-tags", type=int, default=3)
     p.add_argument("--min-cube-tags", type=int, default=2)
-    p.add_argument("--max-rms", type=float, default=1.5)
+    p.add_argument("--max-rms", type=float, default=4.0,
+                   help="reject the solve above this reprojection rms, px. "
+                        "A pixel is range/focal in metres -- ~0.8 mm at 0.85 m "
+                        "here -- so convert before changing it")
     p.add_argument("--display", action="store_true")
     p.add_argument("--verify", action="store_true",
                    help="write an overlay image next to --out")
@@ -154,7 +235,32 @@ def main(argv=None) -> int:
             max_rms_px=args.max_rms,
         )
     except scene_solve.SceneError as e:
-        print(f"\n  FAILED: {e}")
+        try:
+            obs, _, _ = scene_solve.observe(images, detector)
+        except scene_solve.SceneError:
+            obs = {}
+        diagnose(images, obs, base_map, object_map, K, dist, e)
+        # Always leave an image behind on failure -- that is when you most need
+        # to see what the camera saw.
+        path = (args.out.with_suffix(".failed.png") if args.out
+                else HERE / "locate_cube.failed.png")
+        canvas = images[-1].copy()
+        for tag_id, corners in obs.items():
+            colour = ((0, 200, 255) if tag_id in base_map
+                      else (255, 120, 0) if tag_id in object_map else (0, 0, 255))
+            pts = corners.astype(int)
+            for i in range(4):
+                cv2.line(canvas, tuple(pts[i]), tuple(pts[(i + 1) % 4]), colour, 2)
+            cv2.putText(canvas, f"#{tag_id}", tuple(pts[0] + np.array([4, -6])),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2, cv2.LINE_AA)
+        g = cv2.cvtColor(canvas, cv2.COLOR_BGR2GRAY)
+        cv2.putText(canvas, f"FAILED  mean {g.mean():.0f}  clip {100*(g>=250).mean():.1f}%"
+                    f"  dark {100*(g<=8).mean():.1f}%", (18, 36),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+        cv2.imwrite(str(path), canvas)
+        print(f"\n  wrote {path}  <- look at this")
+        if args.display:
+            cv2.imshow("FAILED", canvas); cv2.waitKey(0); cv2.destroyAllWindows()
         return 1
 
     obs, _, _ = scene_solve.observe(images, detector)

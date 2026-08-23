@@ -155,7 +155,7 @@ def solve_scene(
     *,
     min_base_tags: int = 3,
     min_object_tags: int = 2,
-    max_rms_px: float = 1.5,
+    max_rms_px: float = 4.0,
     n_frames: int = 1,
 ) -> SceneSolution:
     """Solve camera pose and object pose from one set of observations.
@@ -165,6 +165,30 @@ def solve_scene(
     looks plausible but can have the wrong sign of tilt. Two visible faces make
     the point set genuinely three-dimensional and the ambiguity disappears.
     Aim the camera at a corner of the cube, not square at one face.
+
+    ``max_rms_px`` is 4.0, not the 1.5 it started at. The gate is in pixels but
+    the requirement is in millimetres, and the conversion is range/focal: at
+    0.6-0.85 m with f = 1007 px, one pixel is 0.6-0.83 mm, so 1.5 px demanded
+    0.9-1.25 mm of agreement. That is 3-4x stricter than the ~4 mm the rig
+    actually needs, and it rejected maps that were measurably fine.
+
+    4.0 px is ~3.3 mm at the far tag. THAT IS CLOSE TO THE EDGE: the rig's ~4 mm
+    budget is 4.8 px at that range, so this gate is now spending most of the
+    error budget on tag-map disagreement alone, leaving little for everything
+    downstream. Do not raise it again without re-doing the arithmetic -- past
+    ~4.8 px the gate stops enforcing the requirement at all and a genuinely
+    displaced tag sails through.
+
+    The honest fix in that direction is not a bigger number: it is more pixels
+    on the tag (move the camera closer, print the base tags larger) or a
+    cleaner image (the captures behind this were 17% clipped), either of which
+    lets the gate come back DOWN. Re-derive it if the geometry changes.
+
+    Note what this number can and cannot do. It measures whether the tags agree
+    with EACH OTHER. A common offset of the whole base map moves the solved
+    camera with it and never shows up here at any threshold (see the z-offset
+    warning in the module docs); only physical measurement or --verify finds
+    that.
     """
     check_disjoint(base_map, object_map)
 

@@ -22,6 +22,15 @@ camera_matrix = np.array([
     [0.00000000, 0.00000000, 1.00000000],
     ])
 
+CAMERA_SETTINGS = {
+    "fourcc": "YUYV",   # exposure is a no-op in MJPG on the Rocketfish
+    "fps": 10.0,
+    "exposure": 30,     # tune with tune_camera.py
+    "contrast": None,    # under 60 clamps to 60, this camera's worst setting
+    "sharpness": 0,
+}
+
+
 # for rocketfish HD webcam dist
 dist = np.array([[0.01040809, -0.13017203, 0.00133320, -0.00613676, 0.14209619]])
 

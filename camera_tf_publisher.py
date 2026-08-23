@@ -158,12 +158,16 @@ def main(argv=None) -> int:
     p.add_argument("--base-tags", type=Path, default=HERE / "tags_base_assy.yaml")
     p.add_argument("--cube-tags", type=Path, default=HERE / "cube_tags.yaml")
     p.add_argument("--device", type=int, default=0)
-    p.add_argument("--exposure", type=int, default=60)
+    p.add_argument("--exposure", type=int, default=None,
+                   help="override constants.CAMERA_SETTINGS exposure")
     p.add_argument("--burst", type=int, default=10)
     p.add_argument("--rate", type=float, default=1.0, help="captures per second")
     p.add_argument("--min-base-tags", type=int, default=3)
     p.add_argument("--min-cube-tags", type=int, default=2)
-    p.add_argument("--max-rms", type=float, default=1.5)
+    p.add_argument("--max-rms", type=float, default=4.0,
+                   help="reject the solve above this reprojection rms, px. "
+                        "A pixel is range/focal in metres -- ~0.8 mm at 0.85 m "
+                        "here -- so convert before changing it")
     p.add_argument("--move-warn", type=float, default=0.005,
                    help="warn if the camera shifts more than this, metres")
     args = p.parse_args(argv)

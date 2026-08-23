@@ -41,8 +41,15 @@ DEFAULT_SETTINGS = {
     # subpixel corner localization, so keep it at 0 for both calibration and
     # runtime.
     "sharpness": 0,
-    "brightness": 0,
-    "contrast": 1,
+    # None = leave the driver's own default. These are per-camera image-quality
+    # controls whose legal ranges differ wildly between devices, and an
+    # out-of-range value is silently CLAMPED -- often to the worst setting the
+    # camera has. (The Rocketfish clamps contrast to 60, its minimum, when asked
+    # for anything lower; its default is 136.) Set these per camera in
+    # constants.CAMERA_SETTINGS, not here.
+    "brightness": None,
+    "contrast": None,
+    "gamma": None,
 }
 
 _PROPS = {
@@ -59,7 +66,12 @@ _PROPS = {
     "sharpness": cv2.CAP_PROP_SHARPNESS,
     "brightness": cv2.CAP_PROP_BRIGHTNESS,
     "contrast": cv2.CAP_PROP_CONTRAST,
+    "gamma": cv2.CAP_PROP_GAMMA,
 }
+
+# Controls whose readback is not expected to echo what we wrote (drivers
+# normalise or reinterpret these), so a mismatch is not worth reporting.
+_NO_VERIFY = {"fourcc", "fps", "auto_exposure", "auto_wb", "autofocus"}
 
 
 class Camera:
@@ -128,6 +140,25 @@ def open_camera(device: int = 0, exposure: int | None = None, **overrides):
         value = settings.get(name)
         if value is not None:
             cam.set(_PROPS[name], float(value))
+
+    # Verify each control actually took. Drivers silently CLAMP out-of-range
+    # values to the nearest legal one -- which is often the worst possible
+    # setting -- and report success either way. This check is what turns that
+    # into a visible warning instead of a mystery detection failure.
+    for name, want in settings.items():
+        if want is None or name in _NO_VERIFY:
+            continue
+        got = cam.get(_PROPS[name])
+        if abs(float(got) - float(want)) > max(1.0, abs(float(want)) * 0.02):
+            print(f"  [WARN] {name}: asked for {want}, driver reports {got:g} "
+                  f"-- clamped or unsupported on this camera")
+
+    shown = " ".join(
+        f"{k}={settings[k]}" for k in
+        ("fourcc", "exposure", "brightness", "contrast", "gamma", "sharpness")
+        if settings.get(k) is not None)
+    print(f"  camera: {int(settings['frame_width'])}x{int(settings['frame_height'])} "
+          f"{shown}  (autofocus off)")
 
     got_w = int(round(cam.get(cv2.CAP_PROP_FRAME_WIDTH)))
     got_h = int(round(cam.get(cv2.CAP_PROP_FRAME_HEIGHT)))

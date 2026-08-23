@@ -91,10 +91,14 @@ def draw_corner_indices(image, det) -> None:
 
 def solve_single_tag(corners_img, size, K, dist):
     """Pose of one tag in the camera frame, from its 4 corners alone."""
+    # NOT SOLVEPNP_IPPE_SQUARE: that flag assumes its own corner order
+    # (TL,TR,BR,BL with +Y up), which is not TAG_CORNER_OFFSETS_UNIT's order
+    # (BL,BR,TR,TL). Feeding it our points yields a wildly wrong pose -- 753 mm
+    # and 158 deg in a controlled test -- while still looking plausible.
     obj = tmap.tag_corner_offsets(size).reshape(-1, 1, 3)
     img = np.asarray(corners_img, dtype=np.float64).reshape(-1, 1, 2)
     ok, rvecs, tvecs, _ = cv2.solvePnPGeneric(
-        obj, img, K, dist, flags=cv2.SOLVEPNP_IPPE_SQUARE
+        obj, img, K, dist, flags=cv2.SOLVEPNP_IPPE
     )
     if not ok or not len(rvecs):
         return None
@@ -481,7 +485,8 @@ def main(argv=None) -> int:
     p.add_argument("--tags", type=Path, default=DEFAULT_TAGS, help="tag map YAML")
     p.add_argument("--out", type=Path, default=DEFAULT_OUT, help="output YAML")
     p.add_argument("--device", type=int, default=0, help="VideoCapture index")
-    p.add_argument("--exposure", type=int, default=60, help="manual exposure")
+    p.add_argument("--exposure", type=int, default=None,
+                   help="override constants.CAMERA_SETTINGS exposure")
     p.add_argument("--frames", type=int, default=200, help="usable frames to collect")
     p.add_argument("--settle", type=int, default=10, help="frames discarded at start")
     p.add_argument("--max-rms", type=float, default=1.5, help="per-frame reject, px")

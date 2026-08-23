@@ -115,15 +115,23 @@ def build_pdf(family, ids, size_m, quiet_m, page_name, out_path):
                     if not bits[rr, cc]:
                         page.rect(tx + quiet + cc * cell, ty + quiet + rr * cell,
                                   cell, cell, 1.0)
-            # corner ticks in the quiet zone: what to check with calipers
+            # Short corner ticks: the black-border edge, for calipers.
             for cxm in (tx + quiet, tx + quiet + size):
                 for cym in (ty + quiet, ty + quiet + size):
                     dx = -1 if cxm == tx + quiet else 1
                     dy = -1 if cym == ty + quiet else 1
                     page.line(cxm + dx * 2, cym, cxm + dx * 6, cym, 0.25)
                     page.line(cxm, cym + dy * 2, cxm, cym + dy * 6, 0.25)
+            # Long centre-line ticks at the edge midpoints. The map's xyz is the
+            # tag CENTRE, which is invisible under the black; line a straightedge
+            # between opposing ticks and the crossing point is it.
+            mx, my = tx + quiet + size / 2, ty + quiet + size / 2
+            page.line(tx + quiet - 11, my, tx + quiet - 1, my, 0.35)
+            page.line(tx + quiet + size + 1, my, tx + quiet + size + 11, my, 0.35)
+            page.line(mx, ty + quiet - 11, mx, ty + quiet - 1, 0.35)
+            page.line(mx, ty + quiet + size + 1, mx, ty + quiet + size + 11, 0.35)
             page.text(tx + quiet, ty + tile_w + 5.5,
-                      f"{family}  id {tag_id}   {size:.1f} mm", 8)
+                      f"{family}  id {tag_id}   {size:.1f} mm  (xyz = CENTRE)", 8)
             placed += 1
 
         ry = ph - margin
@@ -161,9 +169,19 @@ def build_tile(family, tag_id, size_m, quiet_m, dpi, label=True):
             cv2.line(tile, (cx + dx * gap, cy), (cx + dx * (gap + arm), cy), 0, t)
             cv2.line(tile, (cx, cy + dy * gap), (cx, cy + dy * (gap + arm)), 0, t)
 
+    # Long centre-line ticks at the edge midpoints (see the PDF path).
+    mid = quiet_px + tag_px // 2
+    long_arm = int(round(0.010 * ppm))
+    for a, b in (
+        (quiet_px - gap - long_arm, quiet_px - gap),
+        (quiet_px + tag_px + gap, quiet_px + tag_px + gap + long_arm),
+    ):
+        cv2.line(tile, (a, mid), (b, mid), 0, t)
+        cv2.line(tile, (mid, a), (mid, b), 0, t)
+
     if label:
         s = max(0.35, tag_px / 900)
-        cv2.putText(tile, f"{family}  id {tag_id}   {size_m*1000:.1f} mm",
+        cv2.putText(tile, f"{family}  id {tag_id}   {size_m*1000:.1f} mm  (xyz = CENTRE)",
                     (quiet_px, n + int(cap_px * 0.72)),
                     cv2.FONT_HERSHEY_SIMPLEX, s, 0, max(1, int(s * 2)), cv2.LINE_AA)
     return tile

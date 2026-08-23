@@ -438,7 +438,8 @@ def main(argv=None) -> int:
     p.add_argument("--save-dir", type=Path, default=None,
                    help="save accepted live frames here")
     p.add_argument("--device", type=int, default=0)
-    p.add_argument("--exposure", type=int, default=60)
+    p.add_argument("--exposure", type=int, default=None,
+                   help="override constants.CAMERA_SETTINGS exposure")
     p.add_argument("--max-views", type=int, default=40)
     p.add_argument("--min-corners", type=int, default=12)
     p.add_argument("--per-cell", type=int, default=25,

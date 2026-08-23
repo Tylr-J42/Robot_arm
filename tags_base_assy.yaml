@@ -51,19 +51,19 @@ default_size: 0.060
 
 tags:
   - id: 0
-    xyz: [-0.200, 0.060, 0.000]     # <-- MEASURE: x, y from the turret axis
-    rpy: [0.0, 0.0, -1.5708]
-    note: "PLACEHOLDER -- flat on table, printed up along base_assy +X"
+    xyz: [-0.2494, 0.678025, -0.0095]     # <-- MEASURE: x, y from the turret axis
+    rpy: [0, 0,  0.0   ]
+    note: "flat on table, printed up along base_assy +X"
 
   - id: 1
-    xyz: [-0.200, 0.360, 0.000]     # <-- MEASURE
-    rpy: [0.0, 0.0, -1.5708]
-    note: "PLACEHOLDER -- flat on table"
+    xyz: [0.1062, 0.678025, -0.0095]     # <-- MEASURE
+    rpy: [0, 0,  0.0   ]
+    note: "flat on table"
 
   - id: 2
-    xyz: [-0.440, 0.200, 0.000]     # <-- MEASURE
-    rpy: [0.0, 0.0, -1.5708]
-    note: "PLACEHOLDER -- flat on table"
+    xyz: [-0.2494, 0.297025, -0.0095]     # <-- MEASURE
+    rpy: [0, 0,  0.0   ]
+    note: "flat on table"
 
 # Only three tags, so there is NO redundancy: scene_solve requires all three
 # every capture (min_base_tags=3). If the arm, the cube, or a cable hides one,

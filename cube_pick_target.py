@@ -38,6 +38,7 @@ from scipy.spatial.transform import Rotation
 
 import apriltag_detect
 import camera_capture
+import camera_extrinsics as ext
 import constants
 import scene_solve
 import tag_map as tmap
@@ -64,6 +65,12 @@ class PickTarget:
     cube_rms_px: float
     cube_tag_ids: list[int]
     camera_xyz: np.ndarray
+    # Orientations for the TF frames a consumer will want to publish, so the
+    # SAME solve that moves the arm is the one drawn in RViz. camera_quat is
+    # the ROS camera_link convention (x forward), not the optical frame --
+    # camera_tf_publisher.py derives it the same way.
+    cube_quat: np.ndarray
+    camera_quat: np.ndarray
 
     def describe(self) -> str:
         return (
@@ -80,13 +87,13 @@ def get_pick_target(
     base_tags: Path = DEFAULT_BASE_TAGS,
     cube_tags: Path = DEFAULT_CUBE_TAGS,
     device: int = 0,
-    exposure: int = 60,
+    exposure: int | None = None,
     burst: int = 20,
     approach_height: float = 0.08,
     lift_height: float = 0.30,
     min_base_tags: int = 3,
     min_cube_tags: int = 2,
-    max_rms_px: float = 1.5,
+    max_rms_px: float = 4.0,
     max_reach: float = 0.9,
 ) -> PickTarget:
     """Capture once, solve the scene, and return pick waypoints.
@@ -151,6 +158,8 @@ def get_pick_target(
         cube_rms_px=sol.obj.rms_px,
         cube_tag_ids=list(sol.obj.tag_ids),
         camera_xyz=sol.t_bc,
+        cube_quat=sol.quat_bo(),
+        camera_quat=Rotation.from_matrix(ext.optical_to_link(sol.R_bc)).as_quat(),
     )
 
 
