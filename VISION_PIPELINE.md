@@ -162,7 +162,17 @@ ROS node and a CLI share them unchanged.
     "Planning FAILED" throws away the one fact that identifies the cause and
     costs hours of guessing at geometry that was fine. Both task scripts now
     print the code name plus a hint per code.
-19. **Scaling an isolated object's map uniformly is invisible to reprojection.**
+19. **Don't pre-turn the turret, and watch how far a plan sweeps it.** The
+    approach pose has 4 IK branches: two at ~+20° of base rotation and two at
+    ~±180°. Pre-rotating the base 180° both wastes the move and lands the IK on
+    a branch that stays swung round, so `--start-base-deg` now defaults to
+    **0**. Separately, OMPL is randomised and will happily return the long-way
+    path when a 20° one exists — `--max-base-travel-deg` (default 120) rejects
+    and replans those, measuring TOTAL path length rather than |end − start| so
+    an out-and-back still counts as wrap. The turret's range is now 450°
+    (−180…+270), so nothing in software stops the harness twisting; this guard
+    is what does.
+20. **Scaling an isolated object's map uniformly is invisible to reprojection.**
     Scaling `cube_tags.yaml` (sizes *and* face offsets) ±3 % left the fit flat
     at 1.03 px — the camera just moves. So RMS can never confirm the cube net
     printed at the right scale; only calipers can. Base tags are different:
@@ -203,29 +213,60 @@ without the rig. On failure it prints a DIAGNOSIS block (per-tag RMS,
 leave-one-out, and a camera-measured vs map distance cross-check that isolates a
 mis-measured coordinate from bad image quality) and writes `*.failed.png`.
 
-## State
+## State  (last updated 2026-08-24)
 
-Working: intrinsics (ChArUco, 0.388 px RMS at 1280×720); base tag map with 3
-coplanar tags detecting reliably; cube net printed and verified in simulation
-(folded net reproduces `cube_tags.yaml` to 0.028 mm).
+Working end to end in simulation: capture → cube pose in `base_assy` → MoveIt
+plan → RViz. `moveit_pick_cube.py` plans the whole sequence; the last reported
+run planned cleanly.
+
+**Verified this far:** intrinsics (ChArUco, 0.388 px RMS at 1280×720); base tag
+map (3 coplanar tags, `default_size` confirmed 60.0 mm by calipers, positions
+consistent to ~1.5 mm); cube net (folded net reproduces `cube_tags.yaml` to
+0.028 mm); tool-down grasp geometry; the straight descent.
+
+**Not yet verified on the real arm:** a full pick with the motors driving. Note
+the arm is OPEN LOOP (steppers, no encoders), so published joint states are
+*commanded* positions — they advance whether or not the drivers are electrically
+enabled, and there is no feedback to tell you the arm actually got anywhere.
 
 Pending:
 - Notes in `tags_base_assy.yaml` still say PLACEHOLDER. `default_size` is
   confirmed 60.0 mm by calipers, so it is the `xyz` notes that are stale.
-- `moveit_pick_cube.py` has NOT been run against the real arm yet. Its vision
-  half is exercised; the MoveIt half (collision objects via `moveit_py`,
-  `DisplayTrajectory`, whether a grasp down at the table plane plans at all
-  under the fixed orientation) is unverified. Start with `plan_only:=true`.
-- Grasp **orientation** now defaults to tool-straight-down (`--orientation
-  down`), derived from the tool tip lying along `6th_wrist_joint`'s +Z, so
-  "down" is `Rz(azimuth) @ Ry(pi)`. The inherited pick-and-pour pose holds the
-  tool *horizontal* — a side grasp for a bottle — and is kept as
-  `--orientation fixed`. `--orientation vision` (from `cube_tags.yaml`'s
-  `grasp:` block) is still untuned against the gripper.
-- The cube sits near z ≈ 0.02 while every tuned pick-and-pour waypoint is at
-  z = 0.175. Reaching that low is still the most likely planning failure, and
-  changing the orientation changes which poses are reachable — re-run
-  `plan_only:=true` after any orientation change.
+- `--orientation vision` (from `cube_tags.yaml`'s `grasp:` block) is still
+  untuned against the gripper. The default `down` is what works.
+- The base-travel guard (`--max-base-travel-deg`) has not been exercised on
+  hardware; confirm the turret really does take the short way round.
+- `--verify` has still not been run since the tag map settled. It is the only
+  check that catches a common offset of the whole base map (finding 6), which
+  matters now that the arm is actually reaching for the cube.
+- The 450° turret range is not protected by anything except that guard — jog it
+  manually through the new range once and confirm the harness takes it.
+
+## Changes made OUTSIDE this repo
+
+Easy to lose, and nothing in this directory hints at them. All backed up `.bak`
+next to the original.
+
+| File | Change |
+|---|---|
+| `~/ws_moveit/src/tyler_arm_urdf/robot.urdf` | joint `1st` upper limit `3.14159` → `4.71239` (+270°), giving a 450° range. **This is the live model** the xacro includes by absolute path, so no `colcon build` is needed — but `move_group` must be restarted. |
+| `~/ws_moveit/src/tyler_arm/config/moveit.rviz` | added a **Vision markers** MarkerArray display on `/vision_markers` (Transient Local QoS) and a **Vision TF** display. Also copied to `install/` so it takes effect without a rebuild. |
+| `robot_urdf.txt` (this repo) | same limit change, but this file is a **STALE COPY** — its `4th`/`5th`/`6th` limits already disagree with the live model. Do not treat it as authoritative. |
+
+## Running it
+
+```
+# terminal 1 -- move_group + RViz (RViz comes from here, NOT from pick_cube.launch.py)
+ros2 launch tyler_arm bringup_real.launch.py
+# terminal 2 -- the Pi
+python3 arm_pi_node.py
+# terminal 3
+ros2 launch /home/tyler/Desktop/Robot_arm/pick_cube.launch.py plan_only:=true
+ros2 launch /home/tyler/Desktop/Robot_arm/pick_cube.launch.py
+```
+
+Only ONE process may open the camera: `moveit_pick_cube.py` and
+`camera_tf_publisher.py` both do.
 
 ## Integration contract
 

@@ -9,7 +9,7 @@ what you see in RViz is exactly what the arm is about to act on. If the picture
 looks wrong, the motion is wrong -- there is no second, hidden number.
 
 SEQUENCE
-    rotate base   --start-base-deg (default 180) before anything else
+    rotate base   --start-base-deg (default 0 = skip) before anything else
     approach      grasp point + 0.15 m up, planner picks the path
     descend       STRAIGHT down onto the cube (Pilz LIN)
     close
@@ -521,19 +521,49 @@ class CubePicker(PickAndPour):
         self._apply(co)
 
     # -- motion -------------------------------------------------------------
-    def _plan_and_execute(self, straight_line=False):
-        """As the parent, plus draw the trajectory and honour --plan-only."""
-        self.arm.set_start_state_to_current_state()
-        if straight_line:
-            from moveit.planning import PlanRequestParameters
-            params = PlanRequestParameters(self.moveit, "pilz_lin")
-            plan = self.arm.plan(single_plan_parameters=params)
-        else:
-            plan = self.arm.plan()
+    def _plan_and_execute(self, straight_line=False, allow_base_sweep=False):
+        """As the parent, plus draw the trajectory and honour --plan-only.
 
-        if not plan:
-            self._report_plan_failure(plan, straight_line)
-            return False
+        Also rejects plans that swing the turret further than necessary. OMPL
+        is randomised and the approach pose has IK branches ~160 deg apart, so
+        it will cheerfully hand back a path that wraps the base most of a turn
+        when a small one exists. That is a cable-wrap risk, not just an
+        inelegance, and replanning usually finds the short way round.
+        """
+        limit = np.radians(self.args.max_base_travel_deg)
+        attempts = max(1, self.args.plan_attempts)
+        plan = None
+        for attempt in range(1, attempts + 1):
+            self.arm.set_start_state_to_current_state()
+            if straight_line:
+                from moveit.planning import PlanRequestParameters
+                params = PlanRequestParameters(self.moveit, "pilz_lin")
+                plan = self.arm.plan(single_plan_parameters=params)
+            else:
+                plan = self.arm.plan()
+
+            if not plan:
+                self._report_plan_failure(plan, straight_line)
+                return False
+
+            if allow_base_sweep or limit <= 0:
+                break
+            total = self._base_travel(plan.trajectory)
+            if total is None or total <= limit:
+                break
+            if attempt < attempts:
+                self.logger.warn(
+                    f"plan sweeps the turret {np.degrees(total):.0f} deg "
+                    f"(limit {self.args.max_base_travel_deg:.0f}); replanning "
+                    f"({attempt}/{attempts}).")
+            else:
+                self.logger.error(
+                    f"every plan swings the turret {np.degrees(total):.0f} deg, "
+                    f"past the {self.args.max_base_travel_deg:.0f} deg cable "
+                    "limit. Refusing, because wrapping the harness is not a "
+                    "recoverable mistake. If this move genuinely needs the "
+                    "long way round, raise --max-base-travel-deg.")
+                return False
 
         self._display(plan.trajectory)
         if self.args.plan_only:
@@ -563,6 +593,22 @@ class CubePicker(PickAndPour):
         -16: "invalid goal constraints -- often the pose_link is not usable by "
              "this planner.",
     }
+
+    def _base_travel(self, trajectory):
+        """Total turret rotation along a planned trajectory, radians.
+
+        Total path length, not |end - start|: a plan that goes out 180 deg and
+        part-way back wraps just as much cable as one that stays there.
+        """
+        try:
+            jt = trajectory.get_robot_trajectory_msg().joint_trajectory
+            if BASE_JOINT_NAME not in jt.joint_names:
+                return None
+            i = jt.joint_names.index(BASE_JOINT_NAME)
+            q = np.array([p.positions[i] for p in jt.points], dtype=float)
+            return float(np.abs(np.diff(q)).sum()) if q.size > 1 else 0.0
+        except Exception:                                       # noqa: BLE001
+            return None
 
     def _report_plan_failure(self, plan, straight_line: bool) -> None:
         try:
@@ -763,7 +809,7 @@ class CubePicker(PickAndPour):
         goal[idx] = float(target)
         self.arm.set_goal_state(
             motion_plan_constraints=[self._joint_goal(names, goal)])
-        if not self._plan_and_execute():
+        if not self._plan_and_execute(allow_base_sweep=True):
             self.logger.error("base rotation failed to plan -- stopping.")
             return False
         return True
@@ -972,10 +1018,17 @@ def main(argv=None):
     p.add_argument("--require-straight", action="store_true",
                    help="treat a failed straight-line (Pilz LIN) plan as fatal "
                         "instead of falling back to a joint-space path")
-    p.add_argument("--start-base-deg", type=float, default=180.0,
-                   help="rotate the turret this many degrees before the pick; "
-                        "0 disables. The joint is limited to +-180 deg, so this "
-                        "may be flipped or clamped to stay in range")
+    p.add_argument("--start-base-deg", type=float, default=0.0,
+                   help="rotate the turret this many degrees before the pick. "
+                        "DEFAULT 0: the approach is reachable with ~20 deg of "
+                        "base rotation, and pre-turning 180 both wastes the "
+                        "move and lands the IK on a branch that stays swung "
+                        "round. Set it only if you actually need it")
+    p.add_argument("--max-base-travel-deg", type=float, default=120.0,
+                   help="reject any plan whose turret rotation exceeds this, "
+                        "to keep the cable harness from wrapping; 0 disables")
+    p.add_argument("--plan-attempts", type=int, default=4,
+                   help="replans allowed when a plan busts the base-travel limit")
     p.add_argument("--arrival-tol-deg", type=float, default=5.0,
                    help="how far a joint may end from its planned end state "
                         "before the run is treated as not having moved")

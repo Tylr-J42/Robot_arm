@@ -129,7 +129,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "start_base_deg", default_value="",
             description="rotate the turret this many degrees before picking; "
-                        "0 disables, '' keeps the script default of 180"),
+                        "'' keeps the script default of 0 (no pre-turn)"),
         DeclareLaunchArgument(
             "orientation", default_value="",
             description="down (default) | fixed | vision"),
