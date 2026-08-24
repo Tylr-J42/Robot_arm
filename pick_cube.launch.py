@@ -26,6 +26,11 @@ Arguments (all optional):
     plan_only:=true       plan and publish, never execute
     cube_xyz:=-0.1,0.5,0.02   bench mode, skip the camera entirely
     no_scene:=true        skip the table/cube collision objects
+    accel_scaling:=0.02   acceleration of the turret/approach/lift moves --
+                          lower this first if the supply browns out
+    velocity_scaling:=0.03    speed of those same moves
+    lin_velocity_scaling:=0.01 / lin_accel_scaling:=0.02
+                          the straight-line descent and retreat
     extra_args:="--burst 40 --max-rms 2.5"    anything else the script takes
 
 Do not run camera_tf_publisher.py alongside this -- both open the camera.
@@ -52,21 +57,37 @@ def _launch_setup(context, *args, **kwargs):
     params["planning_pipelines"] = {
         "pipeline_names": ["ompl", "pilz_industrial_motion_planner"],
     }
+    def scaling(name):
+        return float(LaunchConfiguration(name).perform(context))
+
+    # Governs every JOINT-SPACE move: the turret pre-turn, the approach, the
+    # lift, and the curved fallbacks -- i.e. everything except the LIN descent
+    # and retreat, which read the pilz_lin block below.
+    #
+    # These are the numbers to lower when the supply browns out. All six motors
+    # run at once on an OMPL approach (the descent only moves 2nd/3rd/5th),
+    # so peak draw here is the worst in the whole task. Acceleration is the
+    # bigger lever: the current transient comes from accelerating the rotors,
+    # not from the steady rate.
     params["plan_request_params"] = {
         "planning_attempts": 5,
         "planning_pipeline": "ompl",
         "planner_id": "RRTConnectkConfigDefault",
-        "max_velocity_scaling_factor": 0.1,
-        "max_acceleration_scaling_factor": 0.1,
+        "max_velocity_scaling_factor": scaling("velocity_scaling"),
+        "max_acceleration_scaling_factor": scaling("accel_scaling"),
         "planning_time": 5.0,
     }
+    # The straight-line descent/retreat. Lower than the joint-space moves
+    # because the Pi restarts the steppers from a dead stop at every Pilz
+    # waypoint with no acceleration ramp, so a high rate here loses steps
+    # under gravity -- see VISION_PIPELINE.md.
     params["pilz_lin"] = {
         "plan_request_params": {
             "planning_attempts": 5,
             "planning_pipeline": "pilz_industrial_motion_planner",
             "planner_id": "LIN",
-            "max_velocity_scaling_factor": 0.05,
-            "max_acceleration_scaling_factor": 0.02,
+            "max_velocity_scaling_factor": scaling("lin_velocity_scaling"),
+            "max_acceleration_scaling_factor": scaling("lin_accel_scaling"),
             "planning_time": 5.0,
         }
     }
@@ -137,6 +158,22 @@ def generate_launch_description():
             "require_straight", default_value="false",
             description="fail rather than fall back to a curved path if the "
                         "straight-line descent cannot be planned"),
+        DeclareLaunchArgument(
+            "velocity_scaling", default_value="0.05",
+            description="speed of the joint-space moves (turret, approach, "
+                        "lift) as a fraction of the joint limits. Lower this "
+                        "if the supply browns out on the approach."),
+        DeclareLaunchArgument(
+            "accel_scaling", default_value="0.03",
+            description="acceleration of the joint-space moves. The bigger "
+                        "lever for brownouts -- peak current comes from "
+                        "accelerating, so drop this before velocity_scaling."),
+        DeclareLaunchArgument(
+            "lin_velocity_scaling", default_value="0.01",
+            description="speed of the straight-line descent and retreat"),
+        DeclareLaunchArgument(
+            "lin_accel_scaling", default_value="0.02",
+            description="acceleration of the straight-line descent and retreat"),
         DeclareLaunchArgument(
             "extra_args", default_value="",
             description="passed straight to moveit_pick_cube.py, e.g. '--burst 40'"),
