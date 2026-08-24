@@ -60,6 +60,15 @@ RUN
     # then for real
     ros2 launch /home/tyler/Desktop/Robot_arm/pick_cube.launch.py
 
+WHEN VISION FAILS
+    The arm does not move, and you get the picture rather than a sentence about
+    it: pick_cube.failed.png is written with every detected tag outlined (base
+    amber, cube blue, unmapped red), a banner naming the MISSING tag ids, and
+    the exposure statistics that usually explain them. A window opens too
+    unless --no-show-failure; it blocks for a keypress, because a diagnostic
+    you can scroll past is one you will scroll past. locate_cube.py's full
+    DIAGNOSIS block is printed alongside it.
+
 Do NOT run camera_tf_publisher.py at the same time -- it opens the same
 /dev/video device and one of the two will fail. This script publishes the same
 frames itself, from the solve it actually used.
@@ -69,6 +78,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 import time
 import threading
 
@@ -87,9 +97,12 @@ from shape_msgs.msg import SolidPrimitive
 from tf2_ros import TransformBroadcaster
 from visualization_msgs.msg import Marker, MarkerArray
 
+import cv2
+
 import camera_extrinsics as ext
 import constants
 import cube_pick_target
+import locate_cube
 import tag_map as tmap
 from moveit_pick_and_pour import (
     ARM_GROUP,
@@ -100,6 +113,7 @@ from moveit_pick_and_pour import (
     _EE_FRAME_OFFSET_RPY,
 )
 
+HERE = Path(__file__).resolve().parent
 TABLE_ID = "table"
 CUBE_ID = "cube"
 BASE_JOINT_NAME = "1st"      # the turret; revolute, limits +-pi (robot.urdf)
@@ -240,10 +254,72 @@ class CubePicker(PickAndPour):
             )
         except cube_pick_target.NoTargetError as e:
             self.logger.error(f"Vision failed, NOT moving: {e}")
+            self.report_failure(e)
             return False
 
         self.logger.info(self.target.describe())
         return True
+
+    def report_failure(self, err) -> None:
+        """Show what the camera saw when the solve refused.
+
+        A missing base tag is nearly always a physical fact -- the arm parked in
+        the way, a cable draped over a tag, a highlight burning out a quiet
+        zone -- and none of that is visible in a sentence saying "saw 2 base
+        tag(s), need 3". The picture answers it in a second.
+
+        Writes the annotated frame regardless, and pops a window unless
+        --no-show-failure. Also prints locate_cube's full DIAGNOSIS block, so a
+        failed pick gives exactly the numbers the CLI would have.
+        """
+        frames = getattr(err, "frames", None)
+        if not frames:
+            self.logger.warn(
+                "no frames were captured, so there is no image to show -- the "
+                "failure happened at or before the camera open.")
+            return
+
+        obs = getattr(err, "observations", None) or {}
+        base_map = getattr(err, "base_map", None) or {}
+        cube_map = getattr(err, "cube_map", None) or {}
+
+        seen_b = sorted(set(obs) & set(base_map))
+        missing = sorted(set(base_map) - set(obs))
+        if missing:
+            self.logger.error(
+                f"base tags seen {seen_b}, MISSING {missing} -- look at the "
+                "image: is something parked over them, or has a highlight "
+                "washed one out?")
+
+        try:
+            locate_cube.diagnose(frames, obs, base_map, cube_map,
+                                 constants.camera_matrix, constants.dist, err)
+        except Exception as e:                                  # noqa: BLE001
+            self.logger.warn(f"could not run the full diagnosis: {e}")
+
+        try:
+            canvas = locate_cube.annotate_failure(
+                frames[-1], obs, base_map, cube_map)
+            path = HERE / "pick_cube.failed.png"
+            cv2.imwrite(str(path), canvas)
+            self.logger.error(f"camera view written to {path}  <- look at this")
+        except Exception as e:                                  # noqa: BLE001
+            self.logger.warn(f"could not write the failure image: {e}")
+            return
+
+        if self.args.no_show_failure:
+            return
+        try:
+            # Blocks until a key is pressed: a diagnostic you can scroll past is
+            # a diagnostic you will scroll past. --no-show-failure for
+            # unattended runs.
+            cv2.imshow("pick_cube FAILED - what the camera saw", canvas)
+            self.logger.error("showing the camera view -- press any key to close")
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        except Exception as e:                                  # noqa: BLE001
+            self.logger.warn(
+                f"could not open a window ({e}); the image is still on disk.")
 
     def publish_vision(self) -> None:
         """Store the solve's frames so the timer keeps them alive in RViz."""
@@ -456,14 +532,121 @@ class CubePicker(PickAndPour):
             plan = self.arm.plan()
 
         if not plan:
-            self.logger.error("Planning FAILED -- aborting task.")
+            self._report_plan_failure(plan, straight_line)
             return False
 
         self._display(plan.trajectory)
         if self.args.plan_only:
             self.logger.info("--plan-only: planned but NOT executing.")
             return True
-        self.moveit.execute(plan.trajectory, controllers=[])
+        return self._execute_and_verify(plan.trajectory)
+
+    # MoveIt says exactly why a plan failed; a bare "Planning FAILED" throws
+    # that away and leaves you guessing at geometry that is probably fine.
+    _HINTS = {
+        -10: "the arm is already in collision AT ITS CURRENT POSE. The table "
+             "collision object is the usual culprit -- rerun with no_scene:=true "
+             "to confirm, then fix the table height rather than deleting it.",
+        -12: "the GOAL pose is in collision. With the tool pointing down at a "
+             "cube on the table, the gripper body reaching below the tool tip "
+             "would do this. Try no_scene:=true; if that fixes it, the table "
+             "box or the gripper geometry is the problem, not the vision.",
+        -31: "no IK solution for the goal. Check the pose is really in the "
+             "workspace and that --orientation/--yaw are not asking for a wrist "
+             "angle outside its limits.",
+        -2:  "invalid motion plan -- typical of Pilz LIN when the straight line "
+             "cannot be followed. If this is the descent, check the arm really "
+             "is at the approach pose first.",
+        -1:  "the planner searched and found nothing. Usually reachability or "
+             "collision rather than a configuration error.",
+        -6:  "timed out. Raise planning_time in pick_cube.launch.py.",
+        -16: "invalid goal constraints -- often the pose_link is not usable by "
+             "this planner.",
+    }
+
+    def _report_plan_failure(self, plan, straight_line: bool) -> None:
+        try:
+            from moveit_msgs.msg import MoveItErrorCodes as E
+            names = {getattr(E, n): n for n in dir(E)
+                     if n.isupper() and isinstance(getattr(E, n), int)}
+            code = plan.error_code.val
+            label = names.get(code, "?")
+            planner = "Pilz LIN" if straight_line else "OMPL"
+            self.logger.error(
+                f"Planning FAILED [{planner}]: {label} ({code}) after "
+                f"{getattr(plan, 'planning_time', float('nan')):.2f} s")
+            hint = self._HINTS.get(code)
+            if hint:
+                self.logger.error(f"  -> {hint}")
+        except Exception as e:                                  # noqa: BLE001
+            self.logger.error(f"Planning FAILED (could not read error code: {e})")
+
+    def _execute_and_verify(self, trajectory) -> bool:
+        """Execute, and REFUSE to continue unless the arm actually got there.
+
+        MoveItCpp::execute returns an ExecutionStatus, and with no active
+        controllers it logs "No active controllers configured for group" and
+        returns ABORTED. Throwing that return value away is how a dead
+        controller turns into a confusing failure two waypoints later: nothing
+        moves, so every subsequent segment plans from the same stale state, and
+        the straight-line descent is then asked to slew the tool ~180 deg on
+        its first interpolation step and fails on orientation.
+
+        Fail here, where the cause is still legible.
+        """
+        status = self.moveit.execute(trajectory, controllers=[])
+        name = getattr(status, "status", str(status))
+        if not status:
+            self.logger.error(
+                f"EXECUTION FAILED: {name}. The plan was fine; the controllers "
+                "did not run it. Check move_group's log for 'No active "
+                "controllers configured for group' and that the arm "
+                "controllers are running and the motors are enabled. Nothing "
+                "moved, so continuing would plan every later waypoint from a "
+                "stale state. Use --plan-only to exercise planning with the "
+                "arm disabled.")
+            return False
+
+        # A controller can accept a goal and report success while the motors
+        # are powered down. Same stale-state consequence, so check the state
+        # rather than trusting the report.
+        time.sleep(self.args.settle)
+        if not self._arrived(trajectory):
+            return False
+        return True
+
+    def _arrived(self, trajectory) -> bool:
+        try:
+            jt = trajectory.get_robot_trajectory_msg().joint_trajectory
+            want = dict(zip(jt.joint_names, jt.points[-1].positions))
+            psm = self.moveit.get_planning_scene_monitor()
+            with psm.read_only() as scene:
+                now = list(scene.current_state.get_joint_group_positions(ARM_GROUP))
+            names = list(
+                self.robot_model.get_joint_model_group(ARM_GROUP).active_joint_model_names)
+            worst, worst_name = 0.0, ""
+            for n, target in want.items():
+                if n not in names:
+                    continue
+                d = abs(now[names.index(n)] - float(target))
+                if d > worst:
+                    worst, worst_name = d, n
+        except Exception as e:                                  # noqa: BLE001
+            # A binding problem here must not block a run that is otherwise
+            # fine -- this is a safety net, not the primary check.
+            self.logger.warn(f"could not verify arrival ({e}); continuing.")
+            return True
+
+        if worst > np.radians(self.args.arrival_tol_deg):
+            self.logger.error(
+                f"reported success but the arm did NOT arrive: joint "
+                f"{worst_name} is {np.degrees(worst):.1f} deg from the planned "
+                f"end state (tolerance {self.args.arrival_tol_deg:.1f} deg). "
+                "Motors disabled, or a controller accepting goals without "
+                "driving them? Stopping, because every later waypoint would "
+                "plan from this stale state. Raise --arrival-tol-deg if your "
+                "arm simply tracks loosely.")
+            return False
         return True
 
     def _display(self, trajectory) -> None:
@@ -489,6 +672,23 @@ class CubePicker(PickAndPour):
         and for the descent onto the cube it might -- use --require-straight to
         make a LIN failure fatal instead.
         """
+        if self.args.plan_only:
+            # --plan-only never executes, so the arm never actually arrives at
+            # the approach pose, and set_start_state_to_current_state() hands
+            # this segment the arm's REAL pose instead of the previous
+            # waypoint. LIN interpolates orientation as well as position, and
+            # from a start whose tool is ~180 deg away from the grasp
+            # orientation the very first interpolation step demands a full
+            # wrist flip -- so it fails instantly, every time, and tells you
+            # nothing about the real run. Plan it with OMPL instead.
+            self.logger.warn(
+                f"{what}: --plan-only cannot chain waypoints (nothing executes), "
+                "so a straight-line plan would start from the arm's current "
+                "pose and fail on orientation regardless of the real geometry. "
+                "Planning this segment with OMPL; the straight line is only "
+                "meaningful on a run that actually moves.")
+            return self.move_to_pose(xyz, straight_line=False, quat=quat)
+
         self.logger.info(f"{what}: straight line to {np.round(xyz, 3).tolist()}")
         if self.move_to_pose(xyz, straight_line=True, quat=quat):
             return True
@@ -568,6 +768,55 @@ class CubePicker(PickAndPour):
             return False
         return True
 
+    def apply_tool_reach(self) -> None:
+        """Command the ee frame high enough that the FINGERS reach the cube.
+
+        The `ee` frame is not the fingertip. It sits 62.8 mm along the wrist,
+        while the gripper's own collision geometry (gripper_pincher_2.stl)
+        reaches 93.2 mm -- so 30.5 mm of gripper hangs BELOW the frame we aim
+        with.
+
+        Sideways that never mattered, which is why the inherited pick-and-pour
+        orientation was fine. Pointing straight DOWN it matters completely:
+        driving the ee frame onto the cube centre puts the pinchers 10 mm
+        underneath the table, and MoveIt correctly refuses with
+        GOAL_IN_COLLISION. Raising the ee by the tool reach puts the PINCH
+        POINT on the cube centre instead -- which is where it belonged -- and
+        the gripper clears the table by 30 mm.
+
+        Only for --orientation down; nothing hangs below the tool when the
+        gripper is horizontal.
+        """
+        reach = self.args.tool_reach
+        if self.args.orientation != "down" or reach <= 0:
+            return
+        up = np.array([0.0, 0.0, 1.0])
+        t = self.target
+        old = float(t.grasp[2])
+        t.grasp = np.asarray(t.grasp, float) + up * reach
+        t.approach = t.grasp + up * self.args.approach_height
+        t.lift = t.grasp + up * self.args.lift_height
+        self.logger.info(
+            f"tool reach {reach*1000:.1f} mm: raising the commanded grasp "
+            f"z {old:+.3f} -> {t.grasp[2]:+.3f} m so the fingers, not the ee "
+            "frame, land on the cube.")
+
+        try:
+            base_map = tmap.load_tag_map(cube_pick_target.DEFAULT_BASE_TAGS)
+            table_z = float(np.median([s.t_w[2] for s in base_map.values()]))
+        except Exception:                                       # noqa: BLE001
+            return
+        clearance = (t.grasp[2] - reach) - table_z
+        if clearance < 0:
+            self.logger.error(
+                f"even raised, the gripper reaches {-clearance*1000:.1f} mm "
+                "BELOW the table at the grasp. Expect GOAL_IN_COLLISION. The "
+                "cube pose or the table height is wrong, or --tool-reach is "
+                "too large.")
+        else:
+            self.logger.info(
+                f"gripper clears the table by {clearance*1000:.1f} mm at the grasp.")
+
     def _grasp_quat(self):
         """The wrist orientation to grasp with, or None to keep the tuned one."""
         mode = self.args.orientation
@@ -607,6 +856,13 @@ class CubePicker(PickAndPour):
     # -- the task -----------------------------------------------------------
     def run(self):
         self.logger.info("Starting vision-guided cube pick.")
+        if self.args.plan_only:
+            self.logger.warn(
+                "--plan-only: nothing executes, so EVERY segment is planned "
+                "from the arm's current state rather than the previous "
+                "waypoint. Each pose is still checked for reachability and "
+                "collision and drawn in RViz, but the sequence is not "
+                "validated end to end -- only a run that moves does that.")
 
         if not self.capture():
             return
@@ -626,11 +882,12 @@ class CubePicker(PickAndPour):
                 "came from waypoints at z=0.175; if planning fails here that "
                 "is the first thing to suspect, not the vision.")
 
+        quat = self._grasp_quat()
+        self.apply_tool_reach()
+
         self.logger.info(f"approach {np.round(t.approach, 3).tolist()}")
         self.logger.info(f"grasp    {np.round(t.grasp, 3).tolist()}")
         self.logger.info(f"lift     {np.round(t.lift, 3).tolist()}")
-
-        quat = self._grasp_quat()
 
         if not self.rotate_base():
             return
@@ -701,6 +958,12 @@ def main(argv=None):
     p.add_argument("--burst", type=int, default=20)
     p.add_argument("--max-rms", type=float, default=4.0,
                    help="reject the solve above this reprojection rms, px")
+    p.add_argument("--tool-reach", type=float, default=0.0305,
+                   help="how far the gripper's collision geometry extends "
+                        "PAST the ee frame, metres. Measured from the URDF "
+                        "meshes (gripper_pincher_2 at 93.2 mm vs ee at 62.8). "
+                        "With --orientation down the commanded grasp is raised "
+                        "by this so the fingers reach the cube; 0 disables")
     p.add_argument("--approach-height", type=float, default=0.15,
                    help="how far above the grasp point to stage before the "
                         "straight descent, metres")
@@ -713,10 +976,19 @@ def main(argv=None):
                    help="rotate the turret this many degrees before the pick; "
                         "0 disables. The joint is limited to +-180 deg, so this "
                         "may be flipped or clamped to stay in range")
+    p.add_argument("--arrival-tol-deg", type=float, default=5.0,
+                   help="how far a joint may end from its planned end state "
+                        "before the run is treated as not having moved")
+    p.add_argument("--settle", type=float, default=0.3,
+                   help="seconds to wait after executing before reading the "
+                        "arm state back, so the state monitor has caught up")
     p.add_argument("--plan-only", action="store_true",
                    help="plan and draw in RViz, but do not move the arm")
     p.add_argument("--no-scene", action="store_true",
                    help="skip the table/cube collision objects")
+    p.add_argument("--no-show-failure", action="store_true",
+                   help="on a vision failure still write pick_cube.failed.png, "
+                        "but do not open a window (the window blocks for a key)")
     p.add_argument("--no-markers", action="store_true",
                    help="skip the cube/base-tag/camera markers on /vision_markers")
     p.add_argument("--orientation", choices=("down", "fixed", "vision"),

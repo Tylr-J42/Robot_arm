@@ -840,6 +840,6 @@
     <parent link="base_assy"/>
     <child link="1st_joint_turret"/>
     <axis xyz="0 0 1"/>
-    <limit effort="10" velocity="10" lower="-3.14159" upper="4.71239"/>
+    <limit effort="10" velocity="10" lower="-3.14159" upper="3.14159"/>
   </joint>
 </robot>

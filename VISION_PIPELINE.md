@@ -37,6 +37,7 @@ systematic. A 1% focal error is a 1% depth error at every range.
 | `cube_pick_target.py` | The MoveIt seam. Returns pick waypoints. |
 | `camera_tf_publisher.py` | ROS2 node broadcasting camera/cube/grasp TF. |
 | `moveit_pick_cube.py` | **The pick.** One capture → TF + scene + MoveIt motion. |
+| ↳ on failure | writes `pick_cube.failed.png` + shows it; shares `locate_cube.annotate_failure`/`diagnose`. |
 | `pick_cube.launch.py` | Runs it with the MoveIt config params attached. |
 | `calibrate_intrinsics.py` | ChArUco intrinsics, guided capture. |
 | `calibrate_camera_extrinsics.py` | **Validation only** — nothing at runtime reads its output. |
@@ -124,7 +125,44 @@ ROS node and a CLI share them unchanged.
     coplanar squares it scattered ±5 mm when the 12-point joint fit put the map
     at 1.5 mm. That is why `diagnose()` only warns past 8 mm. Read it for
     *direction and sign*, not magnitude.
-16. **Scaling an isolated object's map uniformly is invisible to reprojection.**
+16. **An arm that does not MOVE poisons every later waypoint.**
+    `set_start_state_to_current_state()` reads the real arm, so if a segment
+    does not execute, the next one plans from the stale pose. Pilz LIN
+    interpolates orientation as well as position, so a descent planned from a
+    start whose tool is ~180° away fails on its FIRST interpolation step — and
+    the error surfaces at the descent, far from the actual cause. Two triggers,
+    both now caught explicitly:
+    - `--plan-only` never executes by design. It cannot validate a sequence,
+      only individual poses; straight-line segments are planned with OMPL there
+      and it says so.
+    - **`MoveItCpp::execute()` returns an `ExecutionStatus` that was being
+      discarded.** With no active controllers it logs "No active controllers
+      configured for group" and returns ABORTED, which looked like success.
+      Both task scripts now check it, and `moveit_pick_cube` additionally
+      compares the arm's joints against the trajectory's final point
+      (`--arrival-tol-deg`, default 5°) to catch a controller that accepts a
+      goal while the motors are off.
+
+    The descent geometry itself is fine and was measured: both endpoints
+    reachable tool-down, manipulability ~0.043 (nowhere near singular), 47° of
+    joint-limit margin, peak joint rate 2.4 rad/m, and all 4 IK branches can
+    follow it. If the descent fails on a run that genuinely moves, suspect
+    something new — not the geometry.
+17. **`ee` is NOT the fingertip — 30.5 mm of gripper hangs below it.** The
+    `ee` frame sits 62.8 mm along `6th_wrist_joint`; `gripper_pincher_2.stl`
+    reaches 93.2 mm. Sideways this never mattered, which is why pick-and-pour
+    never hit it. Pointing the tool DOWN it matters completely: aiming the ee
+    frame at a cube centre 20.5 mm above the table puts the pinchers 10 mm
+    *under* the table and MoveIt refuses with GOAL_IN_COLLISION. Raising the
+    commanded ee by the tool reach puts the PINCH POINT on the cube centre,
+    where it belonged, and clears the table by 30 mm (`--tool-reach`, default
+    0.0305). Any new top-down tooling needs this number re-measured.
+18. **Read the planner's error code.** `plan()` returns a response carrying
+    `.error_code`, `.planner_id` and `.planning_time`; logging a bare
+    "Planning FAILED" throws away the one fact that identifies the cause and
+    costs hours of guessing at geometry that was fine. Both task scripts now
+    print the code name plus a hint per code.
+19. **Scaling an isolated object's map uniformly is invisible to reprojection.**
     Scaling `cube_tags.yaml` (sizes *and* face offsets) ±3 % left the fit flat
     at 1.03 px — the camera just moves. So RMS can never confirm the cube net
     printed at the right scale; only calipers can. Base tags are different:

@@ -61,6 +61,47 @@ def draw_overlay(image, sol, obs, base_map, object_map, K, dist):
 
 
 
+def annotate_failure(image, obs, base_map, object_map):
+    """Draw what the detector actually saw onto a copy of the frame.
+
+    Base tags amber, object tags blue, anything in NEITHER map red -- a red box
+    means a detection that is not in any map, which is a different problem from
+    a tag that is simply missing.
+
+    The banner carries the exposure statistics because the usual reason a tag
+    vanishes is that its quiet zone blew out or the whole frame went dark, and
+    those numbers say which. It also names the tags that are missing, since
+    "which one dropped out" is the first thing you want and counting boxes by
+    eye across a cluttered bench is slow.
+    """
+    canvas = image.copy()
+    for tag_id, corners in obs.items():
+        colour = ((0, 200, 255) if tag_id in base_map
+                  else (255, 120, 0) if tag_id in object_map else (0, 0, 255))
+        pts = corners.astype(int)
+        for i in range(4):
+            cv2.line(canvas, tuple(pts[i]), tuple(pts[(i + 1) % 4]), colour, 2)
+        cv2.putText(canvas, f"#{tag_id}", tuple(pts[0] + np.array([4, -6])),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2, cv2.LINE_AA)
+
+    g = cv2.cvtColor(canvas, cv2.COLOR_BGR2GRAY)
+    cv2.putText(canvas, f"FAILED  mean {g.mean():.0f}  clip {100*(g>=250).mean():.1f}%"
+                f"  dark {100*(g<=8).mean():.1f}%", (18, 36),
+                cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+
+    missing_b = sorted(set(base_map) - set(obs))
+    missing_o = sorted(set(object_map) - set(obs))
+    note = []
+    if missing_b:
+        note.append(f"base MISSING {missing_b}")
+    if missing_o:
+        note.append(f"cube missing {missing_o}")
+    if note:
+        cv2.putText(canvas, "   ".join(note), (18, 68),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2, cv2.LINE_AA)
+    return canvas
+
+
 def diagnose(images, obs, base_map, object_map, K, dist, err):
     """Explain a failed solve instead of just refusing.
 
@@ -244,19 +285,7 @@ def main(argv=None) -> int:
         # to see what the camera saw.
         path = (args.out.with_suffix(".failed.png") if args.out
                 else HERE / "locate_cube.failed.png")
-        canvas = images[-1].copy()
-        for tag_id, corners in obs.items():
-            colour = ((0, 200, 255) if tag_id in base_map
-                      else (255, 120, 0) if tag_id in object_map else (0, 0, 255))
-            pts = corners.astype(int)
-            for i in range(4):
-                cv2.line(canvas, tuple(pts[i]), tuple(pts[(i + 1) % 4]), colour, 2)
-            cv2.putText(canvas, f"#{tag_id}", tuple(pts[0] + np.array([4, -6])),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, colour, 2, cv2.LINE_AA)
-        g = cv2.cvtColor(canvas, cv2.COLOR_BGR2GRAY)
-        cv2.putText(canvas, f"FAILED  mean {g.mean():.0f}  clip {100*(g>=250).mean():.1f}%"
-                    f"  dark {100*(g<=8).mean():.1f}%", (18, 36),
-                    cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 0, 255), 2, cv2.LINE_AA)
+        canvas = annotate_failure(images[-1], obs, base_map, object_map)
         cv2.imwrite(str(path), canvas)
         print(f"\n  wrote {path}  <- look at this")
         if args.display:

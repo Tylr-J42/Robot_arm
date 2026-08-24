@@ -146,7 +146,18 @@ class PickAndPour:
         if not plan:
             self.logger.error("Planning FAILED — aborting task.")
             return False
-        self.moveit.execute(plan.trajectory, controllers=[])
+        # execute() returns an ExecutionStatus and returns ABORTED (after
+        # logging "No active controllers configured for group") when the
+        # controllers are not running. Ignoring it lets a dead controller look
+        # like a successful move, and the task then carries on issuing
+        # waypoints against an arm that never left its start pose.
+        status = self.moveit.execute(plan.trajectory, controllers=[])
+        if not status:
+            self.logger.error(
+                f"EXECUTION FAILED: {getattr(status, 'status', status)}. "
+                "The plan was fine but the controllers did not run it — check "
+                "that the arm controllers are active and the motors enabled.")
+            return False
         return True
 
     def move_to_pose(self, xyz, straight_line=False):

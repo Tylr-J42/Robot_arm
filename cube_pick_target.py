@@ -49,7 +49,22 @@ DEFAULT_CUBE_TAGS = HERE / "cube_tags.yaml"
 
 
 class NoTargetError(RuntimeError):
-    """The scene could not be solved well enough to move the arm."""
+    """The scene could not be solved well enough to move the arm.
+
+    Carries the evidence with it. ``frames`` is the burst that was captured and
+    ``observations`` the tags that were found in it (possibly empty), so a
+    caller can show the operator what the camera actually saw instead of only
+    a sentence about it. Both are None when the failure happened before or
+    during capture. See ``locate_cube.annotate_failure``.
+    """
+
+    def __init__(self, message, *, frames=None, observations=None,
+                 base_map=None, cube_map=None):
+        super().__init__(message)
+        self.frames = frames
+        self.observations = observations
+        self.base_map = base_map
+        self.cube_map = cube_map
 
 
 @dataclass
@@ -113,19 +128,32 @@ def get_pick_target(
     finally:
         cam.release()
 
+    detector = apriltag_detect.make_detector()
+
+    def no_target(message, cause=None):
+        """Fail WITH the picture. Re-detecting is cheap next to a bad move."""
+        try:
+            obs, _, _ = scene_solve.observe(frames, detector)
+        except Exception:                                       # noqa: BLE001
+            obs = {}
+        err = NoTargetError(message, frames=frames, observations=obs,
+                            base_map=base_map, cube_map=cube_map)
+        if cause is not None:
+            raise err from cause
+        raise err
+
     try:
         sol, _ = scene_solve.solve_scene_from_images(
-            frames, base_map, cube_map, K, dist,
-            apriltag_detect.make_detector(),
+            frames, base_map, cube_map, K, dist, detector,
             min_base_tags=min_base_tags,
             min_object_tags=min_cube_tags,
             max_rms_px=max_rms_px,
         )
     except scene_solve.SceneError as e:
-        raise NoTargetError(str(e)) from e
+        no_target(str(e), e)
 
     if sol.obj.planar:
-        raise NoTargetError(
+        no_target(
             "only one cube face is visible, so the cube's orientation is "
             "two-fold ambiguous. Move the camera to see a second face."
         )
@@ -137,12 +165,12 @@ def get_pick_target(
     # is much better to say so here than to watch MoveIt fail obscurely.
     reach = float(np.linalg.norm(t_g))
     if reach > max_reach:
-        raise NoTargetError(
+        no_target(
             f"grasp point is {reach:.3f} m from the base, beyond the {max_reach} m "
             "sanity limit -- the solve is almost certainly wrong."
         )
     if t_g[2] < -0.05:
-        raise NoTargetError(
+        no_target(
             f"grasp point is {t_g[2]:.3f} m, below the base plane -- the solve "
             "is almost certainly wrong (check for a flipped planar solution)."
         )
