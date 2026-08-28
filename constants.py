@@ -25,8 +25,18 @@ camera_matrix = np.array([
 CAMERA_SETTINGS = {
     "fourcc": "YUYV",   # exposure is a no-op in MJPG on the Rocketfish
     "fps": 10.0,
-    "exposure": 30,     # tune with tune_camera.py
+    # At 10 fps the frame period is 100 ms, i.e. 1000 in this control's 100us
+    # units, so anything above that is clamped. Values from ~35 up to 3000
+    # measure identically -- exposure is NOT the brightness lever on this
+    # camera, gamma is.
+    "exposure": 800,    # tune with tune_camera.py
     "contrast": None,    # under 60 clamps to 60, this camera's worst setting
+    # Below ~350 this camera returns a blown-out first frame (mean ~250) and
+    # then settles far too dark (mean ~56) -- the "sometimes overexposed,
+    # usually dark" failure. 450 measures a stable mean ~151 across reopens.
+    # NB: open_camera did not write gamma at all until this was found, so any
+    # value set here before then was silently ignored.
+    "gamma": 450,
     "sharpness": 0,
 }
 

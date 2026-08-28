@@ -136,7 +136,7 @@ def open_camera(device: int = 0, exposure: int | None = None, **overrides):
     # values are written, or the driver overwrites them again.
     for name in ("autofocus", "auto_exposure", "auto_wb", "frame_width",
                  "frame_height", "fps", "focus", "zoom", "exposure", "gain",
-                 "sharpness", "brightness", "contrast"):
+                 "sharpness", "brightness", "contrast", "gamma"):
         value = settings.get(name)
         if value is not None:
             cam.set(_PROPS[name], float(value))
@@ -203,8 +203,38 @@ def settle(cam: cv2.VideoCapture, frames: int = 10) -> None:
         cam.read()
 
 
+class DeadCaptureError(RuntimeError):
+    """The camera streamed, but the frames carry no image.
+
+    Distinct from "no frames": read() succeeds and hands back a buffer of the
+    right size, it is just uniformly black or a flat grey field. The Rocketfish
+    does this after a USB autosuspend/resume it has not recovered from, and it
+    is silent -- the driver reports success and the controls read back exactly
+    as written, because the writes never reach the firmware.
+
+    Catching it here matters because a flat frame is not a detection failure.
+    It finds no tags, which reads downstream as "the cube is not visible" and
+    sends everyone hunting the vision pipeline instead of the USB link.
+    """
+
+
+# A real image of this workspace measures std ~66. Both observed garbage modes
+# are far below that: uniform black is std <1, and the flat-grey field the
+# camera emits after a bad resume is std ~3. Anything under this is not a
+# picture of anything.
+MIN_FRAME_STD = 8.0
+MIN_FRAME_MEAN = 5.0
+
+
+def frame_quality(image) -> tuple[float, float]:
+    """(mean, std) of the luma. Cheap enough to run on every capture."""
+    grey = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if image.ndim == 3 else image
+    return float(grey.mean()), float(grey.std())
+
+
 def capture_burst(
-    cam: cv2.VideoCapture, n: int = 20, settle_frames: int = 10
+    cam: cv2.VideoCapture, n: int = 20, settle_frames: int = 10,
+    check_quality: bool = True,
 ) -> list[np.ndarray]:
     """Grab a short burst of frames of a static scene.
 
@@ -213,6 +243,9 @@ def capture_burst(
     across the burst cuts detector noise by sqrt(N) at the cost of a fraction of
     a second. That matters more now that the camera pose is re-solved from each
     capture rather than averaged over a long calibration run.
+
+    Raises DeadCaptureError if the burst carries no image. Pass
+    check_quality=False when photographing something legitimately featureless.
     """
     settle(cam, settle_frames)
     frames = []
@@ -224,7 +257,43 @@ def capture_burst(
             frames.append(image)
     if not frames:
         raise SystemExit("camera returned no frames")
+
+    if check_quality:
+        mean, std = frame_quality(frames[-1])
+        if std < MIN_FRAME_STD or mean < MIN_FRAME_MEAN:
+            raise DeadCaptureError(
+                f"camera returned {len(frames)} frames carrying no image "
+                f"(luma mean {mean:.1f}, std {std:.1f}; a real view of this "
+                f"workspace measures std ~66). The USB link is the suspect, "
+                f"not the exposure -- check `dmesg` for uvcvideo -110 timeouts "
+                f"and whether /sys/bus/usb/devices/1-5/power/control is 'auto'. "
+                f"Replug the camera or reload uvcvideo to clear it."
+            )
     return frames
+
+
+def open_and_capture(device: int = 0, exposure: int | None = None, n: int = 20,
+                     settle_frames: int = 10, attempts: int = 3, **overrides):
+    """capture_burst with the camera reopened between tries.
+
+    The failure this recovers from is per-stream: once the device has streamed a
+    dead frame it keeps doing so until the stream is torn down, but a fresh
+    open often comes back clean. Returns (frames, camera-settings); the camera
+    is released before returning either way.
+    """
+    last = None
+    for attempt in range(1, attempts + 1):
+        cam = open_camera(device, exposure, **overrides)
+        try:
+            frames = capture_burst(cam, n, settle_frames)
+            return frames, cam.settings
+        except DeadCaptureError as e:
+            last = e
+            print(f"  [WARN] dead capture on attempt {attempt}/{attempts}; "
+                  f"reopening the camera")
+        finally:
+            cam.release()
+    raise last
 
 
 def warn_if_settings_drifted(cam, intrinsics_path="camera_intrinsics.yaml") -> None:

@@ -122,11 +122,13 @@ def get_pick_target(
     grasp = tmap.load_grasp(cube_tags)
     scene_solve.check_disjoint(base_map, cube_map)
 
-    cam = camera_capture.open_camera(device, exposure)
+    # Retries with a fresh open: the camera intermittently streams frames that
+    # carry no image at all, and a reopen usually clears it. Without this the
+    # flat frame reaches the detector and reads as "no tags visible".
     try:
-        frames = camera_capture.capture_burst(cam, burst)
-    finally:
-        cam.release()
+        frames, _ = camera_capture.open_and_capture(device, exposure, burst)
+    except camera_capture.DeadCaptureError as e:
+        raise NoTargetError(str(e)) from e
 
     detector = apriltag_detect.make_detector()
 
