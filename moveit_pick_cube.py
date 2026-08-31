@@ -119,6 +119,11 @@ CUBE_ID = "cube"
 BASE_JOINT_NAME = "1st"      # the turret; revolute, limits +-pi (robot.urdf)
 
 
+def wrist_matrix_pointing_down(azimuth_rad: float) -> np.ndarray:
+    """Rotation matrix form of wrist_quat_pointing_down, same convention."""
+    return Rotation.from_quat(wrist_quat_pointing_down(azimuth_rad)).as_matrix()
+
+
 def wrist_quat_pointing_down(azimuth_rad: float) -> np.ndarray:
     """Wrist orientation whose TOOL axis points straight down (-Z in base).
 
@@ -814,8 +819,8 @@ class CubePicker(PickAndPour):
             return False
         return True
 
-    def apply_tool_reach(self) -> None:
-        """Command the ee frame high enough that the FINGERS reach the cube.
+    def apply_tool_reach(self, quat=None) -> None:
+        """Offset the commanded pose so the JAW CENTRE lands on the cube.
 
         The `ee` frame is not the fingertip. It sits 62.8 mm along the wrist,
         while the gripper's own collision geometry (gripper_pincher_2.stl)
@@ -833,26 +838,39 @@ class CubePicker(PickAndPour):
         Only for --orientation down; nothing hangs below the tool when the
         gripper is horizontal.
         """
-        reach = self.args.tool_reach
-        if self.args.orientation != "down" or reach <= 0:
+        offset = np.array([self.args.tool_lateral, self.args.tool_side,
+                           self.args.tool_reach], float)
+        if self.args.orientation != "down" or not offset.any():
             return
         up = np.array([0.0, 0.0, 1.0])
         t = self.target
-        old = float(t.grasp[2])
-        t.grasp = np.asarray(t.grasp, float) + up * reach
+        before = np.asarray(t.grasp, float).copy()
+
+        # The offset lives in the WRIST frame, so it has to be rotated by the
+        # orientation we are actually going to grasp at -- which is why this
+        # runs after _grasp_quat(). The lateral term points wherever the wrist
+        # is yawed, so with --yaw cube it swings with the cube's faces; a fixed
+        # world-frame shift would only be right at one particular yaw.
+        R = (Rotation.from_quat(quat).as_matrix() if quat is not None
+             else wrist_matrix_pointing_down(0.0))
+        t.grasp = before - R @ offset
         t.approach = t.grasp + up * self.args.approach_height
         t.lift = t.grasp + up * self.args.lift_height
+
+        shift = t.grasp - before
         self.logger.info(
-            f"tool reach {reach*1000:.1f} mm: raising the commanded grasp "
-            f"z {old:+.3f} -> {t.grasp[2]:+.3f} m so the fingers, not the ee "
-            "frame, land on the cube.")
+            f"tool offset [{offset[0]*1000:+.1f} {offset[1]*1000:+.1f} "
+            f"{offset[2]*1000:+.1f}] mm in the wrist frame -> commanded grasp "
+            f"moves [{shift[0]*1000:+.1f} {shift[1]*1000:+.1f} "
+            f"{shift[2]*1000:+.1f}] mm, putting the jaw centre on the cube.")
+        old = float(before[2])
 
         try:
             base_map = tmap.load_tag_map(cube_pick_target.DEFAULT_BASE_TAGS)
             table_z = float(np.median([s.t_w[2] for s in base_map.values()]))
         except Exception:                                       # noqa: BLE001
             return
-        clearance = (t.grasp[2] - reach) - table_z
+        clearance = old - table_z
         if clearance < 0:
             self.logger.error(
                 f"even raised, the gripper reaches {-clearance*1000:.1f} mm "
@@ -862,6 +880,46 @@ class CubePicker(PickAndPour):
         else:
             self.logger.info(
                 f"gripper clears the table by {clearance*1000:.1f} mm at the grasp.")
+
+    def _cube_face_yaw(self, cube_quat, bearing: float) -> float:
+        """Yaw that squares the jaws to the cube's vertical faces.
+
+        Two things the obvious Euler-angle version gets wrong.
+
+        First, which axis is up. The cube frame is defined by cube_tags.yaml,
+        so whichever face carries the tags decides which cube axis points at
+        the ceiling -- it is not always Z. Reading euler[2] assumes it is, and
+        goes through gimbal lock returning nonsense when it is not. So find the
+        most vertical cube axis and take a face direction from the other two.
+
+        Second, symmetry. A cube's faces repeat every 90 deg and a parallel jaw
+        closes the same way at yaw and yaw+180, so the grasp is only defined
+        modulo 90 deg. Every representative grips identically, but they are not
+        equally reachable, so fold onto the one nearest the turret bearing --
+        the yaw the arm naturally assumes to reach the target. That caps the
+        wrist's deviation from the easy pose at 45 deg instead of letting it
+        demand an 80 deg twist when -10 deg would have gripped just as well.
+        """
+        R = Rotation.from_quat(cube_quat).as_matrix()   # columns: cube axes in base
+        vertical = int(np.argmax(np.abs(R[2, :])))
+        tilt = np.degrees(np.arccos(min(1.0, abs(R[2, vertical]))))
+        if tilt > 30.0:
+            self.logger.warn(
+                f"the cube's most vertical axis is {tilt:.0f} deg off vertical "
+                "-- it may be resting on an edge or corner, and 'square to the "
+                "faces' is not well defined. Falling back to the turret "
+                "bearing; use --yaw-offset if the jaws still miss.")
+            return bearing
+        face = R[:, [i for i in range(3) if i != vertical][0]]
+        yaw = float(np.arctan2(face[1], face[0]))
+        # Fold into the 90 deg symmetry, nearest the bearing.
+        quarter = np.pi / 2
+        yaw += round((bearing - yaw) / quarter) * quarter
+        self.logger.info(
+            f"cube face yaw {np.degrees(yaw):+.1f} deg (turret bearing "
+            f"{np.degrees(bearing):+.1f}, so the wrist twists "
+            f"{np.degrees(abs(yaw - bearing)):.1f} deg to square up)")
+        return yaw
 
     def _grasp_quat(self):
         """The wrist orientation to grasp with, or None to keep the tuned one."""
@@ -883,7 +941,8 @@ class CubePicker(PickAndPour):
         t = self.target
         if self.args.yaw == "cube":
             # Square the fingers to the cube's faces.
-            yaw = float(Rotation.from_quat(t.cube_quat).as_euler("xyz")[2])
+            bearing = float(np.arctan2(t.grasp[1], t.grasp[0]))
+            yaw = self._cube_face_yaw(t.cube_quat, bearing)
             how = "cube faces"
         else:
             # Point the wrist along the turret's own bearing to the target. The
@@ -929,7 +988,7 @@ class CubePicker(PickAndPour):
                 "is the first thing to suspect, not the vision.")
 
         quat = self._grasp_quat()
-        self.apply_tool_reach()
+        self.apply_tool_reach(quat)
 
         self.logger.info(f"approach {np.round(t.approach, 3).tolist()}")
         self.logger.info(f"grasp    {np.round(t.grasp, 3).tolist()}")
@@ -1004,6 +1063,18 @@ def main(argv=None):
     p.add_argument("--burst", type=int, default=20)
     p.add_argument("--max-rms", type=float, default=4.0,
                    help="reject the solve above this reprojection rms, px")
+    p.add_argument("--tool-lateral", type=float, default=0.0095,
+                   help="wrist-frame X from the ee frame to the jaw centreline, "
+                        "metres. The ee frame sits at x=-9.5 mm in the wrist "
+                        "while the jaws are symmetric about x=0, so without "
+                        "this the grasp is offset by that much, in whatever "
+                        "direction the wrist happens to be yawed. Measured "
+                        "from robot.urdf; trim it if the jaws still sit off.")
+    p.add_argument("--tool-side", type=float, default=0.0,
+                   help="wrist-frame Y from the ee frame to the jaw centreline, "
+                        "metres. Zero by URDF symmetry -- the two pinchers sit "
+                        "at y=+/-61 mm -- so only set this to trim a real "
+                        "gripper that is not symmetric.")
     p.add_argument("--tool-reach", type=float, default=0.0305,
                    help="how far the gripper's collision geometry extends "
                         "PAST the ee frame, metres. Measured from the URDF "
@@ -1050,7 +1121,7 @@ def main(argv=None):
                         "straight at the table (right for a cube); 'fixed' is "
                         "the inherited pick-and-pour side grasp; 'vision' uses "
                         "cube_tags.yaml's grasp block and is experimental")
-    p.add_argument("--yaw", choices=("azimuth", "cube"), default="azimuth",
+    p.add_argument("--yaw", choices=("azimuth", "cube"), default="cube",
                    help="with --orientation down, what sets the spin about the "
                         "vertical: 'azimuth' follows the turret bearing (most "
                         "reachable), 'cube' squares the fingers to the faces")

@@ -115,6 +115,12 @@ def _launch_setup(context, *args, **kwargs):
     orientation = LaunchConfiguration("orientation").perform(context)
     if orientation:
         script_args += ["--orientation", orientation]
+    yaw = LaunchConfiguration("yaw").perform(context)
+    if yaw:
+        script_args += ["--yaw", yaw]
+    yaw_offset = LaunchConfiguration("yaw_offset").perform(context)
+    if yaw_offset:
+        script_args.append(f"--yaw-offset={yaw_offset}")     # '=' : may be negative
     if LaunchConfiguration("require_straight").perform(context).lower() == "true":
         script_args.append("--require-straight")
     extra = LaunchConfiguration("extra_args").perform(context)
@@ -158,6 +164,15 @@ def generate_launch_description():
             "require_straight", default_value="false",
             description="fail rather than fall back to a curved path if the "
                         "straight-line descent cannot be planned"),
+        DeclareLaunchArgument(
+            "yaw", default_value="",
+            description="what sets the wrist spin with orientation=down: "
+                        "cube (default, squares the jaws to the cube's faces) "
+                        "| azimuth (follows the turret bearing)"),
+        DeclareLaunchArgument(
+            "yaw_offset", default_value="",
+            description="degrees added to the chosen yaw, to trim the finger "
+                        "alignment against the real gripper"),
         DeclareLaunchArgument(
             "velocity_scaling", default_value="0.05",
             description="speed of the joint-space moves (turret, approach, "
