@@ -8,6 +8,9 @@ This is the program for planning and controlling the trajectory of the arm. It t
   <img src="docs/media/arm_pick.gif" alt="The custom 6-axis arm in its AprilTag-marked workspace" width="600">
 </p>
 
+> [!TIP]
+> **Interested in the mechanical design?** The **[hardware design write-up](HARDWARE.md)** covers the CNC-machined cycloidal gearboxes and how they were prototyped, the herringbone differential wrist, the geared gripper, power distribution, and lessons learned from building the arm.
+
 **Contents:** [Highlights](#highlights) · [Hardware](#hardware) · [How it works](#how-it-works) · [Engineering notes](#engineering-notes) · [Status](#status) · [Tech stack](#tech-stack) · [Repository layout](#repository-layout) · [Running it](#running-it) · [Hardware write-up →](HARDWARE.md)
 
 ---
@@ -36,11 +39,24 @@ I designed the arm myself in [Onshape](https://cad.onshape.com/documents/d0c301e
 - **Parallel-jaw gripper:** two servos geared together drive four-bar-linkage jaws with swappable TPU grip pads (shown holding a can during the pick-and-pour task).
 - **Raspberry Pi controller** that generates the step pulses. See [Robot_Arm_Controller](https://github.com/Tylr-J42/Robot_Arm_Controller).
 
-**→ [Hardware design write-up](HARDWARE.md):** why I chose cycloidal gearboxes and the differential wrist, and what I'd change next time.
-
 </td>
   </tr>
 </table>
+
+<table>
+  <tr>
+    <td width="33%" align="center"><a href="HARDWARE.md#cycloidal-gearboxes-axes-2-and-3"><img src="docs/media/cycloidal_exploded.png" alt="Exploded CAD view of the cycloidal gearbox"></a></td>
+    <td width="33%" align="center"><a href="HARDWARE.md#herringbone-bevel-gear-differential-wrist-axes-5-and-6"><img src="docs/media/wrist_section.png" alt="CAD cross-section of the differential wrist"></a></td>
+    <td width="33%" align="center"><a href="HARDWARE.md#gripper"><img src="docs/media/gripper.gif" alt="CAD animation of the geared parallel-jaw gripper"></a></td>
+  </tr>
+  <tr>
+    <td align="center"><b><a href="HARDWARE.md#cycloidal-gearboxes-axes-2-and-3">Cycloidal gearboxes →</a></b><br>Seven prototypes, then aluminum discs machined on a CNC mill</td>
+    <td align="center"><b><a href="HARDWARE.md#herringbone-bevel-gear-differential-wrist-axes-5-and-6">Differential wrist →</a></b><br>Two motors share the load through herringbone bevel gears</td>
+    <td align="center"><b><a href="HARDWARE.md#gripper">Geared gripper →</a></b><br>Four-bar parallel jaws with swappable TPU pads</td>
+  </tr>
+</table>
+
+<p align="center"><b>→ <a href="HARDWARE.md">Read the full hardware design write-up</a></b>: design decisions, prototyping, and what I'd change next time.</p>
 
 ## How it works
 
