@@ -1,16 +1,20 @@
 # Vision-Guided 6-Axis Robot Arm
 
-This is the program for planning and controlling the trajectory of a custom 6-axis robotic arm. It takes visual input from a webcam and uses AprilTags to localize the robot in its environment, then moves the arm to pick up objects within reach. Once the trajectory is planned, it is sent to the [robot arm controller](https://github.com/Tylr-J42/Robot_Arm_Controller) over ROS 2.
+**A 6-axis robot arm I designed, built and programmed from scratch:** custom cycloidal gearboxes, a differential wrist, and vision-guided motion planning with ROS 2 and MoveIt 2.
+
+This is the program for planning and controlling the trajectory of the arm. It takes visual input from a webcam and uses AprilTags to localize the robot in its environment, then moves the arm to pick up objects within reach. Once the trajectory is planned, it is sent to the [robot arm controller](https://github.com/Tylr-J42/Robot_Arm_Controller) over ROS 2.
 
 <p align="center">
   <img src="docs/media/arm_pick.gif" alt="The custom 6-axis arm in its AprilTag-marked workspace" width="600">
 </p>
 
+**Contents:** [Highlights](#highlights) · [Hardware](#hardware) · [How it works](#how-it-works) · [Engineering notes](#engineering-notes) · [Status](#status) · [Tech stack](#tech-stack) · [Repository layout](#repository-layout) · [Running it](#running-it) · [Hardware write-up →](HARDWARE.md)
+
 ---
 
 ## Highlights
 
-- **Custom 6-DOF arm, end to end:** perception, motion planning and the hand-off to the stepper-motor controller running on a Raspberry Pi.
+- **Custom mechanical design:** 19:1 cycloidal gearboxes with discs CNC-machined from 6061 aluminum, a herringbone bevel-gear differential wrist and a geared parallel-jaw gripper, all designed in Onshape.
 - **Camera calibration on every capture:** the camera's position is solved again from fixed base tags in the same frame that sees the object, so a bumped camera can't quietly throw off the result.
 - **Millimetre-level localization:** a ChArUco-calibrated webcam (0.39 px reprojection RMS) and multi-tag PnP place the target to about 1.5 mm in the arm's base frame.
 - **Collision-aware motion planning:** MoveIt 2 handles inverse kinematics and planning. OMPL plans the free-space moves and Pilz LIN plans the straight-line grasp descent and retreat.
@@ -25,11 +29,14 @@ This is the program for planning and controlling the trajectory of a custom 6-ax
 
 I designed the arm myself in [Onshape](https://cad.onshape.com/documents/d0c301e4506d340858f1d1ba/w/f9480a6b56ad6e11bed69cb8/e/ba968be5de3da6f18f08407e) and built it mostly from 3D-printed parts.
 
-- **6 stepper-driven joints** at 1/8 microstepping, each with its own gear reduction. The shoulder reduction is about 48:1.
+- **6 stepper-driven joints** at 1/8 microstepping, each with its own gear reduction.
+- **Custom 19:1 cycloidal gearboxes** on the shoulder and elbow for high torque with very low backlash. The discs are CNC-machined from 6061 aluminum.
 - **Belt-driven turret** on a roller-bearing base, with a 450° range of motion.
-- **Bevel-gear differential wrist:** two motors work together to drive the last two wrist axes.
-- **Two-servo gripper** (shown holding a can during the pick-and-pour task).
+- **Herringbone bevel-gear differential wrist:** two motors in the forearm work together to drive the last two axes.
+- **Parallel-jaw gripper:** two servos geared together drive four-bar-linkage jaws with swappable TPU grip pads (shown holding a can during the pick-and-pour task).
 - **Raspberry Pi controller** that generates the step pulses. See [Robot_Arm_Controller](https://github.com/Tylr-J42/Robot_Arm_Controller).
+
+**→ [Hardware design write-up](HARDWARE.md):** why I chose cycloidal gearboxes and the differential wrist, and what I'd change next time.
 
 </td>
   </tr>
@@ -69,6 +76,41 @@ flowchart LR
   </tr>
 </table>
 
+## Engineering notes
+
+Some of the problems solved along the way. The full list is in [`VISION_PIPELINE.md`](VISION_PIPELINE.md).
+
+- **Silent PnP failure modes.** `SOLVEPNP_IPPE_SQUARE` expects a different corner order than this code uses. Given these points it returns a plausible-looking pose that is 753 mm and 158° off. The fix was to use `SOLVEPNP_IPPE`/`SQPNP` and then refine with VVS.
+- **Error budgets in physical units.** At this camera's range, 1 px of reprojection error is about 0.8 mm. Converting the RMS gate to millimetres showed it was 3–4× tighter than the task needed and was rejecting tag maps that calipers confirmed were correct.
+- **Calibration coverage beats RMS.** A ChArUco session concentrated in the centre of the image scored *better* RMS but had 10× worse focal-length error.
+- **Tool geometry vs. the planning frame.** The gripper tips sit 30.5 mm past the `ee` frame. When the tool points down, ignoring that offset puts the gripper 10 mm under the table and MoveIt rejects the goal as in collision.
+- **Ignored execution status.** `MoveItCpp::execute()` was returning `ABORTED` when no controllers were active, and the code was discarding it. The arm then planned later moves from a stale pose. The scripts now check the status and compare the arm's final joint angles against the trajectory.
+- **Camera firmware quirks.** On this webcam, manual exposure does nothing in MJPG mode, and V4L2 silently clamps out-of-range settings, so `open_camera` now reads every setting back to confirm it took.
+
+For the mechanical side, including PLA creep at the elbow joint, belt tensioning and power supply limits, see [Lessons learned in HARDWARE.md](HARDWARE.md#lessons-learned-and-next-revision).
+
+## Status
+
+**On hold since September 2026.** The arm stayed home when I moved to university, so hardware development is paused until I can get back to it.
+
+**Where it stands**
+
+- ✅ **Vision:** the cube's pose in the arm's frame is verified against caliper measurements to about 1.5 mm. Camera intrinsics are calibrated to 0.39 px RMS.
+- ✅ **Planning:** the full approach → descend → grasp → retreat → lift sequence plans cleanly in MoveIt 2 from a live camera capture.
+- ✅ **Execution:** trajectories reach the Raspberry Pi controller over ROS 2 and drive the arm (see the demo above).
+
+**Known limitations**
+
+- The arm is open-loop (stepper motors with no encoders), so the joint states it reports are the *commanded* positions. The software can't detect a missed step or a stall.
+- The camera captures once, before the arm moves, because the arm blocks the static camera's view once it starts moving. The pick then runs without visual feedback.
+- Grasp orientation is fixed to "tool pointing down." Picking up the cube using the grasp orientation measured from its tags isn't tuned yet.
+
+**Next steps when I'm back on the hardware**
+
+- Add joint encoders for closed-loop position feedback.
+- Mount a camera on the wrist (eye-in-hand) so the arm can re-localize during the approach.
+- Tune vision-derived grasp orientations, and pick up objects other than the tagged cube.
+
 ## Tech stack
 
 | Area | Tools |
@@ -78,10 +120,14 @@ flowchart LR
 | Motion planning | OMPL (RRTConnect), Pilz Industrial Motion Planner |
 | Computer vision | OpenCV (ArUco/ChArUco, PnP), `dt_apriltags` |
 | Math | NumPy, SciPy (`Rotation`) |
-| Hardware | Custom 6-axis arm with stepper motors, Raspberry Pi controller, Rocketfish HD USB webcam |
+| Design & fabrication | Onshape CAD, Bambu Lab A1 (PLA, TPU), Tormach PCNC 1100 CNC mill |
+| Hardware | NEMA 23 / NEMA 17 steppers, Raspberry Pi controller, Rocketfish HD USB webcam |
 | Earlier prototypes | PyTorch gradient-based IK, PyBullet IK |
 
 ## Repository layout
+
+<details>
+<summary>File-by-file overview (click to expand)</summary>
 
 | File | Purpose |
 |---|---|
@@ -104,6 +150,8 @@ flowchart LR
 | `VISION_PIPELINE.md` | In-depth design notes and engineering findings |
 
 The vision modules (`tag_map`, `camera_extrinsics`, `scene_solve`) depend only on NumPy, OpenCV, SciPy and PyYAML, so the CLI tools and the ROS 2 nodes share the same code unchanged.
+
+</details>
 
 ## Running it
 
@@ -133,42 +181,9 @@ ros2 launch ./pick_cube.launch.py plan_only:=true
 ros2 launch ./pick_cube.launch.py
 ```
 
-## Engineering notes
-
-Some of the problems solved along the way. The full list is in [`VISION_PIPELINE.md`](VISION_PIPELINE.md).
-
-- **Silent PnP failure modes.** `SOLVEPNP_IPPE_SQUARE` expects a different corner order than this code uses. Given these points it returns a plausible-looking pose that is 753 mm and 158° off. The fix was to use `SOLVEPNP_IPPE`/`SQPNP` and then refine with VVS.
-- **Error budgets in physical units.** At this camera's range, 1 px of reprojection error is about 0.8 mm. Converting the RMS gate to millimetres showed it was 3–4× tighter than the task needed and was rejecting tag maps that calipers confirmed were correct.
-- **Calibration coverage beats RMS.** A ChArUco session concentrated in the centre of the image scored *better* RMS but had 10× worse focal-length error.
-- **Tool geometry vs. the planning frame.** The gripper tips sit 30.5 mm past the `ee` frame. When the tool points down, ignoring that offset puts the gripper 10 mm under the table and MoveIt rejects the goal as in collision.
-- **Ignored execution status.** `MoveItCpp::execute()` was returning `ABORTED` when no controllers were active, and the code was discarding it. The arm then planned later moves from a stale pose. The scripts now check the status and compare the arm's final joint angles against the trajectory.
-- **Camera firmware quirks.** On this webcam, manual exposure does nothing in MJPG mode, and V4L2 silently clamps out-of-range settings, so `open_camera` now reads every setting back to confirm it took.
-
-## Status
-
-**On hold since September 2026.** The arm stayed home when I moved to university, so hardware development is paused until I can get back to it.
-
-**Where it stands**
-
-- ✅ **Vision:** the cube's pose in the arm's frame is verified against caliper measurements to about 1.5 mm. Camera intrinsics are calibrated to 0.39 px RMS.
-- ✅ **Planning:** the full approach → descend → grasp → retreat → lift sequence plans cleanly in MoveIt 2 from a live camera capture.
-- ✅ **Execution:** trajectories reach the Raspberry Pi controller over ROS 2 and drive the arm (see the demo above).
-
-**Known limitations**
-
-- The arm is open-loop (stepper motors with no encoders), so the joint states it reports are the *commanded* positions. The software can't detect a missed step or a stall.
-- The camera captures once, before the arm moves, because the arm blocks the static camera's view once it starts moving. The pick then runs without visual feedback.
-- Grasp orientation is fixed to "tool pointing down." Picking up the cube using the grasp orientation measured from its tags isn't tuned yet.
-
-**Next steps when I'm back on the hardware**
-
-- Add joint encoders for closed-loop position feedback.
-- Mount a camera on the wrist (eye-in-hand) so the arm can re-localize during the approach.
-- Tune vision-derived grasp orientations, and pick up objects other than the tagged cube.
-
 ## Related repositories
 
-- **[Robot arm controller](https://github.com/Tylr-J42/Robot_Arm_Controller):** ROS 2 node on the Raspberry Pi. It runs a `FollowJointTrajectory` action server that MoveIt sends planned trajectories to, then turns joint angles into stepper motor steps (including the geared differential wrist). It also publishes `/joint_states` and controls the servo gripper through `/gripper_command`.
+- **[Robot_Arm_Controller](https://github.com/Tylr-J42/Robot_Arm_Controller):** the ROS 2 node on the Raspberry Pi that executes trajectories and drives the motors and gripper.
 - **[CAD model (Onshape)](https://cad.onshape.com/documents/d0c301e4506d340858f1d1ba/w/f9480a6b56ad6e11bed69cb8/e/ba968be5de3da6f18f08407e):** full mechanical design of the arm.
 
 ## Author
